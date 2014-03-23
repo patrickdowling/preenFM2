@@ -15,24 +15,25 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "PreenFM.h"
-#include "Encoders.h"
-#include "usbh_core.h"
-#include "usbKey_usr.h"
-#include "usbh_msc_core.h"
+extern "C" {
+#include "ff.h"
 #include "usbd_core.h"
-#include "usbd_usr.h"
 #include "usbd_midi_desc.h"
 #include "usbd_midi_core.h"
+#include "usbd_usr.h"
+#include "usbh_core.h"
+#include "usbh_msc_core.h"
+};
+
+#include "PreenFM.h"
+#include "Encoders.h"
+#include "usbKey_usr.h"
 #include "FMDisplay.h"
 #include "Synth.h"
 #include "RingBuffer.h"
 #include "MidiDecoder.h"
 #include "UsbKey.h"
 #include "Hexter.h"
-
-#include "ff.h"
-
 
 SynthState         synthState __attribute__ ((section(".ccmnoload")));
 Synth              synth __attribute__ ((section(".ccmnoload")));

@@ -25,24 +25,24 @@
   ******************************************************************************
   */
 
-
-
 /* Adapted for PreenFM2 bootloader : Acces Usb Stick mode */
 
 
 /* Includes ------------------------------------------------------------------*/
+extern "C" {
 #include "usbd_msc_mem.h"
+};
 
 #include "UsbKey.h"
 extern UsbKey usbKey ;
 
-
-#include "LiquidCrystal.h"
-extern LiquidCrystal lcd;
+//#include "LiquidCrystal.h"
+//extern LiquidCrystal lcd;
 
 extern int readCpt;
 extern int writeCpt;
 
+extern "C" {
 
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
@@ -58,7 +58,7 @@ int8_t STORAGE_Init (uint8_t lun);
 
 int8_t STORAGE_GetCapacity (uint8_t lun,
                            uint32_t *block_num,
-                           uint16_t *block_size);
+                           uint32_t *block_size);
 
 int8_t  STORAGE_IsReady (uint8_t lun);
 
@@ -77,7 +77,7 @@ int8_t STORAGE_Write (uint8_t lun,
 int8_t STORAGE_GetMaxLun (void);
 
 /* USB Mass storage Standard Inquiry Data */
-const int8_t  STORAGE_Inquirydata[] = {//36
+static int8_t  STORAGE_Inquirydata[] = {//36
 
   /* LUN 0 */
   0x00,
@@ -128,7 +128,7 @@ int8_t STORAGE_Init (uint8_t lun)
 * Output         : None.
 * Return         : None.
 *******************************************************************************/
-int8_t STORAGE_GetCapacity (uint8_t lun, uint32_t *block_num, uint16_t *block_size)
+int8_t STORAGE_GetCapacity (uint8_t lun, uint32_t *block_num, uint32_t *block_size)
 {
 	// #define GET_SECTOR_COUNT	1	/* Mandatory for only f_mkfs() */
 	// #define GET_SECTOR_SIZE		2
@@ -207,4 +207,4 @@ int8_t STORAGE_GetMaxLun (void)
 }
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
-
+};

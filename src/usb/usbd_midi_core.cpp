@@ -1,6 +1,13 @@
-
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include "usbd_midi_core.h"
 #include "usb_dcd.h"
+#ifdef __cplusplus
+};
+#endif
+
+
 #include "PreenFM.h"
 
 
@@ -8,6 +15,10 @@
 uint8_t usbMidiBuffAll[128];
 uint8_t *usbMidiBuffWrt = usbMidiBuffAll;
 uint8_t *usbMidiBuffRead = usbMidiBuffAll;
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*********************************************
  midi Device library callbacks
@@ -297,4 +308,6 @@ static uint8_t *usbd_midi_GetCfgDesc(uint8_t speed, uint16_t *length) {
 	return usbd_audio_CfgDesc;
 }
 
-
+#ifdef __cplusplus
+};
+#endif

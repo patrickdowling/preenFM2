@@ -17,22 +17,35 @@ SYMBOLS_FIRMWARE_O=build/symbols_p2_${PFM2_VERSION_NUMBER}o.txt
 
 BIN_SYSEX=build/p2_${PFM2_VERSION_NUMBER}.syx
 
-C      = arm-none-eabi-gcc 
-CC      = arm-none-eabi-c++ 
+CC      = arm-none-eabi-gcc 
+CXX     = arm-none-eabi-c++ 
 LD      = arm-none-eabi-ld -v
 CP      = arm-none-eabi-objcopy
 OD      = arm-none-eabi-objdump
 AS      = arm-none-eabi-as
 
+# Specify optimization
+ifndef OPTIMIZE
+OPTIMIZE=fast
+endif
+
+# if VERBOSE is defined, spam output
+ifdef VERBOSE
+AT :=
+ECHO := @true
+else
+AT := @
+ECHO := @echo
+endif
 
 SRC_FIRMWARE = src/PreenFM.cpp \
-	src/PreenFM_irq.c \
-	src/PreenFM_init.c \
-	src/usb/usbKey_usr.c \
-	src/usb/usbMidi_usr.c \
+	src/PreenFM_irq.cpp \
+	src/PreenFM_init.cpp \
+	src/usb/usbKey_usr.cpp \
+	src/usb/usbMidi_usr.cpp \
 	src/usb/usbd_midi_desc.c \
 	src/usb/usb_bsp.c \
-	src/usb/usbd_midi_core.c \
+	src/usb/usbd_midi_core.cpp \
 	src/library/STM32_USB_OTG_Driver/src/usb_core.c \
 	src/library/STM32_USB_OTG_Driver/src/usb_hcd.c \
 	src/library/STM32_USB_OTG_Driver/src/usb_hcd_int.c \
@@ -93,8 +106,8 @@ SRC_FIRMWARE = src/PreenFM.cpp \
 SRC_BOOTLOADER = src/bootloader/BootLoader.cpp \
 	src/bootloader/usb_storage_usr.c \
 	src/bootloader/usbd_storage_desc.c \
-	src/bootloader/usbd_storage.c \
-	usr/usb/usbKey_usr.c \
+	src/bootloader/usbd_storage.cpp \
+	usr/usb/usbKey_usr.cpp \
 	usr/usb/usb_bsp.c \
 	src/hardware/Encoders.cpp \
 	src/hardware/LiquidCrystal.cpp \
@@ -131,13 +144,16 @@ SRC_BOOTLOADER = src/bootloader/BootLoader.cpp \
 	src/library/STM32F4xx_StdPeriph_Driver/src/misc.c 
 
 INCLUDESDIR = -I./src/third/ -I./src/library/STM32_USB_HOST_Library/Class/MSC/inc -I./src/library/STM32_USB_HOST_Library/Core/inc -I./src/library/STM32_USB_OTG_Driver/inc -I./src/library/fat_fs/inc -I./src/library/STM32_USB_Device_Library/Core/inc -I./src/library/STM32_USB_Device_Library/Class/midi/inc -I./src/library/STM32F4xx_StdPeriph_Driver/inc/ -I./src/library/CMSIS/Include/ -I./src/utils/ -I./src/hardware -I./src/usb -I./src/synth -I./src/midi -I./src/midipal -I./src -I./src/library/STM32_USB_Device_Library/Class/msc/inc
-SMALLBINOPTS = -mfpu=fpv4-sp-d16 -ffunction-sections -fdata-sections -fno-rtti -fno-exceptions  -Wl,--gc-sections  
 
-# 
+SMALLBINOPTS = -mfpu=fpv4-sp-d16 -ffunction-sections -fdata-sections -Wl,--gc-sections  
+
 DEFINE = -DPFM2_VERSION=${PFM2_VERSION} -DPFM2_BOOTLOADER_VERSION=${PFM2_BOOTLOADER_VERSION}
-CFLAGS  =  -Ofast $(INCLUDESDIR) -c -fno-common   -g  -mthumb -mcpu=cortex-m4 -mfloat-abi=hard $(SMALLBINOPTS) $(DEFINE) -fsigned-char 
+
+COMMONFLAGS = -g -O$(OPTIMIZE) -c -fno-common -mthumb -mcpu=cortex-m4 -mfloat-abi=hard $(SMALLBINOPTS) $(DEFINE) $(INCLUDESDIR) -fsigned-char
+CXXFLAGS += $(COMMONFLAGS) -fno-rtti -fno-exceptions
+CFLAGS += $(COMMONFLAGS)
 # -DDEBUG
-# CFLAGS       =   $(INCLUDESDIR) -c -fno-common   -g  -mthumb -mcpu=cortex-m4 -mfloat-abi=hard $(SMALLBINOPTS) $(DEFINE) -fsigned-char
+
 AFLAGS  = -ahls -mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16    
 LFLAGS  = -Tlinker/stm32f4xx.ld  -mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -gc-sections    --specs=nano.specs
 LFLAGS_BOOTLOADER  = -Tlinker_bootloader/stm32f4xx.ld  -mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -gc-sections --specs=nano.specs  
@@ -153,7 +169,6 @@ OBJ_FIRMWARE = $(OBJTMP_FIRMWARE:.cpp=.o)
 
 OBJTMP_BOOTLOADER = $(addprefix $(OBJDIR),$(notdir $(SRC_BOOTLOADER:.c=.o)))
 OBJ_BOOTLOADER = $(OBJTMP_BOOTLOADER:.cpp=.o)
-
 
 all: 
 	@echo "You must chose a target"
@@ -179,10 +194,10 @@ pfm2_$(PFM2_VERSION_NUMBER).zip :
 
 pfm: $(BIN_FIRMWARE) 
 
-pfmo: CFLAGS += -DOVERCLOCK
+pfmo: CXXFLAGS += -DOVERCLOCK
 pfmo: $(BIN_FIRMWARE_O) 
 
-boot: CFLAGS += -DBOOTLOADER -I./src/bootloader -Os
+boot: CXXFLAGS += -DBOOTLOADER -I./src/bootloader -Os
 boot: $(BIN_BOOTLOADER)
 
 install: $(BIN_FIRMWARE)
@@ -231,14 +246,16 @@ $(BIN_FIRMWARE_O): $(ELF_FIRMWARE_O)
 	ls -l $(BIN_FIRMWARE_O)
 
 $(ELF_FIRMWARE): $(OBJ_FIRMWARE) $(STARTUP)
-	$(CC) $(LFLAGS) $^ -o $@
-	arm-none-eabi-nm -l -S -n $(ELF_FIRMWARE) > $(SYMBOLS_FIRMWARE) 
-	arm-none-eabi-readelf -S $(ELF_FIRMWARE)
+	$(ECHO) "Linking $@..."
+	$(AT)$(CXX) $(LFLAGS) $^ -o $@
+	$(AT)arm-none-eabi-nm -l -S -n $(ELF_FIRMWARE) > $(SYMBOLS_FIRMWARE) 
+	$(AT)arm-none-eabi-readelf -S $(ELF_FIRMWARE)
 
 $(ELF_FIRMWARE_O): $(OBJ_FIRMWARE) $(STARTUP)
-	@$(CC) $(LFLAGS) $^ -o $@
-	arm-none-eabi-nm -l -S -n $(ELF_FIRMWARE_O) > $(SYMBOLS_FIRMWARE_O) 
-	arm-none-eabi-readelf -S $(ELF_FIRMWARE_O)
+	$(ECHO) "Linking $@..."
+	$(AT)$(CXX) $(LFLAGS) $^ -o $@
+	$(AT)arm-none-eabi-nm -l -S -n $(ELF_FIRMWARE_O) > $(SYMBOLS_FIRMWARE_O) 
+	$(AT)arm-none-eabi-readelf -S $(ELF_FIRMWARE_O)
 
 
 $(BIN_BOOTLOADER): $(ELF_BOOTLOADER)
@@ -246,100 +263,102 @@ $(BIN_BOOTLOADER): $(ELF_BOOTLOADER)
 	ls -l $(BIN_BOOTLOADER)
 
 $(ELF_BOOTLOADER): $(OBJ_BOOTLOADER) $(STARTUP_BOOTLOADER)
-	$(CC) $(LFLAGS_BOOTLOADER) $^ -o $@
-	arm-none-eabi-nm -l -S -n $(ELF_BOOTLOADER) > $(SYMBOLS_BOOTLOADER) 
-	arm-none-eabi-readelf -S $(ELF_BOOTLOADER)
+	$(ECHO) "Linking $@..."
+	$(AT)$(CXX) $(LFLAGS_BOOTLOADER) $^ -o $@
+	$(AT)arm-none-eabi-nm -l -S -n $(ELF_BOOTLOADER) > $(SYMBOLS_BOOTLOADER) 
+	$(AT)arm-none-eabi-readelf -S $(ELF_BOOTLOADER)
 
 
 $(STARTUP): linker/startup_stm32f4xx.s
-	$(AS) $(AFLAGS) -o $(STARTUP) linker/startup_stm32f4xx.s > linker/startup_stm32f4xx.lst
+	$(ECHO) "Assembling $<..."
+	$(AT)$(AS) $(AFLAGS) -o $(STARTUP) linker/startup_stm32f4xx.s > linker/startup_stm32f4xx.lst
 
 $(STARTUP_BOOTLOADER): linker_bootloader/startup_stm32f4xx.s
-	$(AS) $(AFLAGS) -o $(STARTUP_BOOTLOADER) linker_bootloader/startup_stm32f4xx.s > linker_bootloader/startup_stm32f4xx.lst
+	$(ECHO) "Assembling $<..."
+	$(AT)$(AS) $(AFLAGS) -o $(STARTUP_BOOTLOADER) linker_bootloader/startup_stm32f4xx.s > linker_bootloader/startup_stm32f4xx.lst
 
 
 build/%.o: src/%.c
-	@echo "Compiling $<..."
-	@$(CC) $(CFLAGS) $< -o $@
+	$(ECHO) "Compiling $<..."
+	$(AT)$(CC) $(CFLAGS) $< -o $@
 
 build/%.o: src/%.cpp
-	@echo "Compiling $<..."
-	@$(CC) $(CFLAGS) $< -o $@
+	$(ECHO) "Compiling $<..."
+	$(AT)$(CXX) $(CXXFLAGS) $< -o $@
 
 build/%.o: src/bootloader/%.c
-	@echo "Compiling $<..."
-	@$(CC) $(CFLAGS) -fpermissive $< -o $@
+	$(ECHO) "Compiling $<..."
+	$(AT)$(CC) $(CFLAGS) $< -o $@
 
 build/%.o: src/bootloader/%.cpp
-	@echo "Compiling $<..."
-	@$(CC) $(CFLAGS) $< -o $@
+	$(ECHO) "Compiling $<..."
+	$(AT)$(CXX) $(CXXFLAGS) $< -o $@
 
 build/%.o: src/usb/%.cpp
-	@echo "Compiling $<..."
-	@$(CC) $(CFLAGS) $< -o $@
+	$(ECHO) "Compiling $<..."
+	$(AT)$(CXX) $(CXXFLAGS) $< -o $@
 
 build/%.o: src/usb/%.c
-	@echo "Compiling $<..."
-	@$(CC) $(CFLAGS) -fpermissive $< -o $@
+	$(ECHO) "Compiling $<..."
+	$(AT)$(CC) $(CFLAGS) $< -o $@
 
 build/%.o: src/third/%.c
-	@echo "Compiling $<..."
-	@$(CC) $(CFLAGS) $< -o $@
+	$(ECHO) "Compiling $<..."
+	$(AT)$(CC) $(CFLAGS) $< -o $@
 
 build/%.o: src/synth/%.cpp
-	@echo "Compiling $<..."
-	@$(CC) $(CFLAGS) $< -o $@
+	$(ECHO) "Compiling $<..."
+	$(AT)$(CXX) $(CXXFLAGS) $< -o $@
 
 build/%.o: src/hardware/%.cpp
-	@echo "Compiling $<..."
-	@$(CC) $(CFLAGS) $< -o $@
+	$(ECHO) "Compiling $<..."
+	$(AT)$(CXX) $(CXXFLAGS) $< -o $@
 
 build/%.o: src/midi/%.cpp
-	@echo "Compiling $<..."
-	@$(CC) $(CFLAGS) $< -o $@
+	$(ECHO) "Compiling $<..."
+	$(AT)$(CXX) $(CXXFLAGS) $< -o $@
 
 build/%.o: src/utils/%.cpp
-	@echo "Compiling $<..."
-	@$(CC) $(CFLAGS) $< -o $@
+	$(ECHO) "Compiling $<..."
+	$(AT)$(CXX) $(CXXFLAGS) $< -o $@
 
 build/%.o: src/library/STM32_USB_OTG_Driver/src/%.c
-	@echo "Compiling $<..."
-	@$(CC) $(CFLAGS) -fpermissive $< -o $@
+	$(ECHO) "Compiling $<..."
+	$(AT)$(CC) $(CFLAGS) $< -o $@
 
 build/%.o: src/library/STM32_USB_HOST_Library/Core/src/%.c
-	@echo "Compiling $<..."
-	@$(CC) $(CFLAGS) -fpermissive $< -o $@
+	$(ECHO) "Compiling $<..."
+	$(AT)$(CC) $(CFLAGS) $< -o $@
 
 build/%.o: src/library/STM32_USB_HOST_Library/Class/MSC/src/%.c
-	@echo "Compiling $<..."
-	@$(CC) $(CFLAGS) -fpermissive $< -o $@
+	$(ECHO) "Compiling $<..."
+	$(AT)$(CC) $(CFLAGS) $< -o $@
 
 build/%.o: src/library/STM32_USB_Device_Library/Core/src/%.c
-	@echo "Compiling $<..."
-	@$(CC) $(CFLAGS) -fpermissive $< -o $@
+	$(ECHO) "Compiling $<..."
+	$(AT)$(CC) $(CFLAGS) $< -o $@
 
 build/%.o: src/library/STM32_USB_Device_Library/Class/msc/src/%.c
-	@echo "Compiling $<..."
-	@$(CC) $(CFLAGS) -fpermissive $< -o $@
+	$(ECHO) "Compiling $<..."
+	$(AT)$(CC) $(CFLAGS) $< -o $@
 
 build/%.o: src/library/STM32F4xx_StdPeriph_Driver/src/%.c
-	@echo "Compiling $<..."
-	@$(CC) $(CFLAGS) -fpermissive $< -o $@
+	$(ECHO) "Compiling $<..."
+	$(AT)$(CC) $(CFLAGS) $< -o $@
 
 build/%.o: src/library/fat_fs/src/%.c
-	@echo "Compiling $<..."
-	@$(CC) $(CFLAGS) -fpermissive $< -o $@
+	$(ECHO) "Compiling $<..."
+	$(AT)$(CC) $(CFLAGS) $< -o $@
 
 build/%.o: src/midipal/%.cpp
-	@echo "Compiling $<..."
-	@$(CC) $(CFLAGS)  $< -o $@
+	$(ECHO) "Compiling $<..."
+	$(AT)$(CXX) $(CXXFLAGS)  $< -o $@
 
 
 clean:
 	@ echo ".clean"
-	rm -f *.lst build/*.o pfm2_$(PFM2_VERSION_NUMBER).zip
+	$(AT)rm -f *.lst build/*.o pfm2_$(PFM2_VERSION_NUMBER).zip
 
 cleanall:
 	@ echo ".clean all"
-	rm -rf *.lst build/*
-
+	$(AT)rm -rf *.lst build/*

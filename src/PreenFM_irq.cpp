@@ -16,8 +16,10 @@
  */
 
 #include "PreenFM.h"
+extern "C" {
 #include "usb_hcd_int.h"
 #include "usb_dcd_int.h"
+};
 #include "LiquidCrystal.h"
 extern LiquidCrystal lcd;
 

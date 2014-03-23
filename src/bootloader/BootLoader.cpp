@@ -15,18 +15,20 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "BootLoader.h"
+extern "C" {
 #include "usbd_storage_desc.h"
-#include "LiquidCrystal.h"
 #include "usbd_msc_core.h"
-#include "UsbKey.h"
-#include "usbKey_usr.h"
-#include "RingBuffer.h"
-#include "flash_if.h"
 #include "usb_hcd_int.h"
 #include "usb_dcd_int.h"
 #include "stm32f4xx_conf.h"
 #include "stm32f4xx_gpio.h"
+};
+#include "BootLoader.h"
+#include "LiquidCrystal.h"
+#include "UsbKey.h"
+#include "usbKey_usr.h"
+#include "RingBuffer.h"
+#include "flash_if.h"
 
 /**
  * @brief  USB_OTG_BSP_uDelay
@@ -48,35 +50,26 @@ LiquidCrystal lcd;
 int readCpt = -1;
 int writeCpt = -1;
 
-extern "C" {
-// USART 3 IRQ
-
-void USART3_IRQHandler(void) {
-	usartBufferIn.insert((char) USART3->DR);
-}
-
-}
-
 // Dummy function ... UsbKey was written for PreenFM
 void fillSoundBuffer() {}
 
 // USB host interrupt
 extern USB_OTG_CORE_HANDLE          usbOTGHost;
-#ifdef __cplusplus
+
 extern "C" {
-#endif
+  // USART 3 IRQ
+  void USART3_IRQHandler(void) {
+    usartBufferIn.insert((char) USART3->DR);
+  }
 
-void OTG_HS_IRQHandler(void) {
-	USBH_OTG_ISR_Handler(&usbOTGHost);
-}
+  void OTG_HS_IRQHandler(void) {
+    USBH_OTG_ISR_Handler(&usbOTGHost);
+  }
 
-void OTG_FS_IRQHandler(void) {
-	USBD_OTG_ISR_Handler(&usbOTGDevice);
-}
-
-#ifdef __cplusplus
-}
-#endif
+  void OTG_FS_IRQHandler(void) {
+    USBD_OTG_ISR_Handler(&usbOTGDevice);
+  }
+};
 
 
 void uDelay (const uint32_t usec) {
