@@ -193,10 +193,10 @@ pfm2_$(PFM2_VERSION_NUMBER).zip :
 
 pfm: $(BIN_FIRMWARE) 
 
-pfmo: CXXFLAGS += -DOVERCLOCK
+pfmo: COMMONFLAGS += -DOVERCLOCK
 pfmo: $(BIN_FIRMWARE_O) 
 
-boot: CXXFLAGS += -DBOOTLOADER -I./src/bootloader -Os
+boot: COMMONFLAGS += -DBOOTLOADER -I./src/bootloader -Os
 boot: $(BIN_BOOTLOADER)
 
 install: $(BIN_FIRMWARE)
