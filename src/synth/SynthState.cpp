@@ -578,6 +578,9 @@ void SynthState::twoButtonsPressed(int button1, int button2) {
 		if (button2 == BUTTON_MENUSELECT) {
 			storage->testMemoryPreset();
 		}
+		if (button2 == BUTTON_BACK) {
+		  synth.showCycles();
+		}
 	}
 #endif
 

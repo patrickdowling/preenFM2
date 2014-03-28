@@ -153,6 +153,7 @@ public:
 
 #ifdef DEBUG
     void debugVoice();
+    void showCycles();
 #endif
 
 

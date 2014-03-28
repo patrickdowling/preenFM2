@@ -20,6 +20,10 @@
 #include "Menu.h"
 #include "stm32f4xx_rng.h"
 
+#ifdef DEBUG
+#include "hardware/dwt.h"
+CYCCNT_buffer cycles_rng, cycles_voices1, cycles_voices2, cycles_fx, cycles_timbres;
+#endif
 
 extern float noise[32];
 float ratiosTimbre[]= { 131072.0f * 1.0f, 131072.0f * 1.0f, 131072.0f *  0.5f, 131072.0f * 0.333f, 131072.0f * 0.25f };
@@ -106,6 +110,9 @@ bool Synth::isPlaying() {
 
 
 void Synth::buildNewSampleBlock() {
+  
+  CYCLE_MEASURE_START(cycles_rng);
+
     float *currentBlock = &samples[writeCursor];
 
 	// Noise... part
@@ -125,7 +132,9 @@ void Synth::buildNewSampleBlock() {
 		noise[noiseIndex++] = value2 * ratioValue - 1.0f; // value between -1 and 1.
 	}
 
+	CYCLE_MEASURE_END();
 
+	CYCLE_MEASURE_START(cycles_voices1);
 	for (int t=0; t<NUMBER_OF_TIMBRES; t++) {
 		timbres[t].cleanNextBlock();
 		if (likely(timbres[t].params.engine1.numberOfVoice > 0)) {
@@ -136,7 +145,9 @@ void Synth::buildNewSampleBlock() {
 			}
 		}
 	}
+	CYCLE_MEASURE_END();
 
+	CYCLE_MEASURE_START(cycles_voices2);
 	// render all voices in their timbre sample block...
 	// 16 voices
 	int k=0;
@@ -156,7 +167,9 @@ void Synth::buildNewSampleBlock() {
 	this->voices[k++].nextBlock();
 	this->voices[k++].nextBlock();
 	this->voices[k++].nextBlock();
+	CYCLE_MEASURE_END();
 
+	CYCLE_MEASURE_START(cycles_fx);
 	// Add timbre per timbre because gate and eventual other effect are per timbre
 	if (likely(timbres[0].params.engine1.numberOfVoice > 0)) {
 		timbres[0].fxAfterBlock(ratioTimbre);
@@ -170,6 +183,9 @@ void Synth::buildNewSampleBlock() {
 	if (likely(timbres[3].params.engine1.numberOfVoice > 0)) {
 		timbres[3].fxAfterBlock(ratioTimbre);
 	}
+	CYCLE_MEASURE_END();
+
+	CYCLE_MEASURE_START(cycles_timbres);
 	float *sampleFromTimbre1 = timbres[0].getSampleBlock();
 	float *sampleFromTimbre2 = timbres[1].getSampleBlock();
 	float *sampleFromTimbre3 = timbres[2].getSampleBlock();
@@ -249,6 +265,8 @@ void Synth::buildNewSampleBlock() {
 	*cb++ = (*sampleFromTimbre1++ + *sampleFromTimbre2++ + *sampleFromTimbre3++ + *sampleFromTimbre4++) + toAdd;
 	*cb++ = (*sampleFromTimbre1++ + *sampleFromTimbre2++ + *sampleFromTimbre3++ + *sampleFromTimbre4++) + toAdd;
 	*cb++ = (*sampleFromTimbre1++ + *sampleFromTimbre2++ + *sampleFromTimbre3++ + *sampleFromTimbre4++) + toAdd;
+
+	CYCLE_MEASURE_END();
 
     if (unlikely(writeCursor == 192)) {
         writeCursor = 0;
@@ -583,5 +601,29 @@ void Synth::debugVoice() {
 		lcd.print((int) voices[n].isPlaying());
     }
 	lcd.setRealTimeAction(false);
+}
+
+void Synth::showCycles() {
+  lcd.setRealTimeAction(true);
+  lcd.clearActions();
+  lcd.clear();
+
+  lcd.setCursor( 0, 0 );
+  lcd.print( "RNG: " );
+  lcd.print( cycles_rng.remove() );
+
+  lcd.setCursor( 0, 1 );
+  lcd.print( "VOI: " );  lcd.print( cycles_voices1.remove() );
+  lcd.print( " " ); lcd.print( cycles_voices2.remove() );
+
+  lcd.setCursor( 0, 2 );
+  lcd.print( "FX : " );
+  lcd.print( cycles_fx.remove() );
+
+  lcd.setCursor( 0, 3 );
+  lcd.print( "TIM: " );
+  lcd.print( cycles_timbres.remove() );
+
+  lcd.setRealTimeAction(false);
 }
 #endif
