@@ -553,7 +553,7 @@ void SynthState::twoButtonsPressed(int button1, int button2) {
 				break;
 #ifndef DEBUG
 			case BUTTON_MATRIX:
-				currentRow = ROW_LFOSEQ1;
+			  	currentRow = ROW_LFOSEQ1;
 				break;
 #endif
 			case BUTTON_MENUSELECT:

@@ -283,6 +283,9 @@ public:
     float* getSampleBlock() {
         return sampleBlock;
     }
+    const float* getSampleBlock() const {
+        return sampleBlock;
+    }
 
     // optimization
     float modulationIndex1, modulationIndex2, modulationIndex3, modulationIndex4, modulationIndex5;

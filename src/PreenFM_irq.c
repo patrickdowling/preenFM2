@@ -162,53 +162,50 @@ void USART3_IRQHandler(void) {
 
 void SysTick_Handler(void)
 {
+  static int left = 0;
+  static int right = 0;
 
-    int sample;
+  // samples are int so no FP operation; this allows Lazy stacking feature
+  // to avoid saving FPU registers
 
-	switch (spiState) {
-	case 0:
-        // LATCH LOW
-        GPIO_ResetBits(GPIOC, GPIO_Pin_12);
-		// Update timer
-		preenTimer += 1;
-		// DAC 1 - MSB
-		GPIO_ResetBits(GPIOB, GPIO_Pin_4);
-		GPIO_SetBits(GPIOB, GPIO_Pin_9);
-        sample = (int)synth.rightSampleAtReadCursor();
-        sample >>= 6;
-        // LATCH HIGH
-        GPIO_SetBits(GPIOC, GPIO_Pin_12);
-		SPI_I2S_SendData(SPI1, 0x3000 | sample );
-		spiState++;
+  switch (spiState++) {
+  case 0:
+    left = synth.leftSampleAtReadCursor();
+    right = synth.rightSampleAtReadCursor();
+    synth.incReadCursor();
 
-		break;
-	case 1:
-		// DAC 2 - MSB
-		GPIO_ResetBits(GPIOB, GPIO_Pin_9);
-		GPIO_SetBits(GPIOB, GPIO_Pin_4);
-		sample = (int)synth.leftSampleAtReadCursor();
-        sample >>= 6;
-		SPI_I2S_SendData(SPI1, 0x3000 | sample);
-        spiState++;
-		break;
-	case 2:
-		// DAC 1 - LSB
-		GPIO_ResetBits(GPIOB, GPIO_Pin_4);
-		GPIO_SetBits(GPIOB, GPIO_Pin_9);
-		sample = (int)synth.rightSampleAtReadCursor() & 0x3f;
-        SPI_I2S_SendData(SPI1, 0xb000 | sample);
-		spiState++;
-		break;
-	case 3:
-		// DAC 2 - LSB
-		GPIO_ResetBits(GPIOB, GPIO_Pin_9);
-		GPIO_SetBits(GPIOB, GPIO_Pin_4);
-		sample = (int)synth.leftSampleAtReadCursor() & 0x3f;
-		SPI_I2S_SendData(SPI1, 0xb000 | sample);
-        spiState = 0;
-        synth.incReadCursor();
-		break;
-	}
+    // LATCH LOW
+    GPIO_ResetBits(GPIOC, GPIO_Pin_12);
+    // Update timer
+    preenTimer += 1;
+	
+    // DAC 1 - MSB
+    GPIO_ResetBits(GPIOB, GPIO_Pin_4);
+    GPIO_SetBits(GPIOB, GPIO_Pin_9);
+    // LATCH HIGH
+    GPIO_SetBits(GPIOC, GPIO_Pin_12);
+    SPI_I2S_SendData(SPI1, 0x3000 | (right >> 6) );
+    break;
+  case 1:
+    // DAC 2 - MSB
+    GPIO_ResetBits(GPIOB, GPIO_Pin_9);
+    GPIO_SetBits(GPIOB, GPIO_Pin_4);
+    SPI_I2S_SendData(SPI1, 0x3000 | (left >> 6));
+    break;
+  case 2:
+    // DAC 1 - LSB
+    GPIO_ResetBits(GPIOB, GPIO_Pin_4);
+    GPIO_SetBits(GPIOB, GPIO_Pin_9);
+    SPI_I2S_SendData(SPI1, 0xb000 | (right & 0x3f));
+    break;
+  case 3:
+    // DAC 2 - LSB
+    GPIO_ResetBits(GPIOB, GPIO_Pin_9);
+    GPIO_SetBits(GPIOB, GPIO_Pin_4);
+    SPI_I2S_SendData(SPI1, 0xb000 | (left & 0x3f));
+    spiState = 0;
+    break;
+  }
 }
 
 

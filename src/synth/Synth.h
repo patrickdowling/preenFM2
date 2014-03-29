@@ -118,23 +118,20 @@ public:
         }
     }
 
-    inline float leftSampleAtReadCursor() {
+    inline int leftSampleAtReadCursor() const {
         return this->samples[this->readCursor];
     }
 
-    inline float rightSampleAtReadCursor() {
+    inline int rightSampleAtReadCursor() const {
         return this->samples[this->readCursor + 1];
     }
 
 
     void incReadCursor() {
-        this->readCursor += 2;
-        if (this->readCursor == 256) {
-            this->readCursor = 0;
-        }
+      this->readCursor = (this->readCursor + 2) & (SAMPLE_BUFFER_SIZE-1);
     }
 
-    inline int getSampleCount() {
+    inline int getSampleCount() const {
         if (this->readCursor > this->writeCursor) {
             return this->writeCursor - this->readCursor + 256;
         } else {
@@ -156,7 +153,6 @@ public:
     void showCycles();
 #endif
 
-
 private:
     // Called by setSynthState
     void init();
@@ -170,7 +166,10 @@ private:
     // sample Buffer
     volatile int readCursor;
     volatile int writeCursor;
-    float samples[256];
+    enum {
+      SAMPLE_BUFFER_SIZE = 256
+    };
+    int samples[SAMPLE_BUFFER_SIZE];
 
     // gate
     float currentGate;
