@@ -15,15 +15,16 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "stm32f4xx_usart.h"
-#include "PreenFM.h"
-#include "MidiDecoder.h"
+extern "C" {
 #include "usbKey_usr.h"
 #include "usb_dcd.h"
+#include "stm32f4xx_usart.h"
+};
 
+#include "PreenFM.h"
+#include "MidiDecoder.h"
 
 extern USB_OTG_CORE_HANDLE          usbOTGDevice;
-
 
 #define INV127 .00787401574803149606f
 

@@ -20,9 +20,11 @@
  * CallBack user file for  USB Key access from PreenFM 2
  * Copied and adapted from ST firmware library
  */
-#include "usbKey_usr.h"
+extern "C" {
 #include "diskio.h"
+};
 
+#include "usbKey_usr.h"
 #include "LiquidCrystal.h"
 extern LiquidCrystal lcd;
 
@@ -39,8 +41,7 @@ DIR dir;
 
 struct usbCommandParam commandParams;
 
-
-
+extern "C" {
 
 USBH_Usr_cb_TypeDef USR_Callbacks = { USBH_USR_Init,
         USBH_USR_DeInit,
@@ -389,3 +390,4 @@ void Fail_Handler(const char*msg) {
 	while (1) {	}
 }
 
+};

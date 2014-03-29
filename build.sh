@@ -1,4 +1,4 @@
-#/bin/bash
+#/bin/bash -e
 
 make cleanall
 make -j5 pfm
@@ -9,7 +9,3 @@ make -j5 boot
 make clean
 make sysex
 make zip
-
-
-
-

@@ -23,11 +23,14 @@
 #ifndef __USBKEY_USR_H__
 #define __USBKEY_USR_H__
 
+#ifdef __cplusplus
+ extern "C" {
+#endif
+
 #include "ff.h"
 #include <stdio.h>
 #include "usbh_core.h"
 #include "usbh_msc_core.h"
-
 
 struct usbCommandParam {
     int         commandState;
@@ -65,11 +68,6 @@ enum {
 // Xavier Hosxe : 1 following lines copied from version fastFS 0.9
 #define f_tell(fp) ((fp)->fptr)
 #define f_size(fp) ((fp)->fsize)
-
-
-#ifdef __cplusplus
- extern "C" {
-#endif
 
 /* Includes ------------------------------------------------------------------*/
 
@@ -114,6 +112,7 @@ void USBH_USR_UnrecoveredError();
 void Fail_Handler(const char*msg);
 void TimingDelay_Decrement(void);
 void Delay(__IO uint32_t nTime);
+
 #ifdef __cplusplus
 }
 #endif

@@ -27,10 +27,10 @@
 
 
 /* Includes ------------------------------------------------------------------*/
-#include "LiquidCrystal.h"
+//#include "LiquidCrystal.h"
 #include "usb_dcd_int.h"
 
-extern LiquidCrystal lcd;
+//extern LiquidCrystal lcd;
 
 int cpt = 0;
 /** @addtogroup USB_OTG_DRIVER

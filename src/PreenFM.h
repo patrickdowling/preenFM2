@@ -15,15 +15,17 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "stm32f4xx_conf.h"
-#include "RingBuffer.h"
-#include "LiquidCrystal.h"
-#include "usb_core.h"
-#include "Synth.h"
-#include "MidiDecoder.h"
-
 #ifndef _PreenFM_H_
 #define _PreenFM_H_
+
+extern "C" {
+#include "stm32f4xx_conf.h"
+#include "usb_core.h"
+};
+#include "RingBuffer.h"
+#include "LiquidCrystal.h"
+#include "Synth.h"
+#include "MidiDecoder.h"
 
 
 #ifndef OVERCLOCK

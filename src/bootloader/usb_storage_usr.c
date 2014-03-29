@@ -1,8 +1,8 @@
 #include "usbd_usr.h"
 #include "usbd_ioreq.h"
 
-#include "LiquidCrystal.h"
-extern LiquidCrystal lcd;
+//#include "LiquidCrystal.h"
+//extern LiquidCrystal lcd;
 
 USBD_Usr_cb_TypeDef storageUsrCallback =
 {
@@ -93,5 +93,3 @@ void USBD_USR_DeviceResumed(void)
 {
   /* Users can do their application actions here for the USB-Reset */
 }
-
-
