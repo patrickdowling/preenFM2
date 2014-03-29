@@ -3,7 +3,7 @@
  *
  * Author: Xavier Hosxe (xavier . hosxe (at) gmail . com)
  *
- * This program is free software: you can redistribute it and/or modify
+ * This progrma is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
@@ -109,26 +109,42 @@ bool Synth::isPlaying() {
     return false;
 }
 
+#define HW_RNG
+
 void Synth::buildNewSampleBlock() {
   CYCLE_MEASURE_START(cycles_rng);
 
 	// Noise... part
-	int noiseIndex = 0;
-	for (int k=0; k<16; k++) {
-		if (RNG_GetFlagStatus(RNG_FLAG_DRDY) != RESET) {
-			/* Get a 32bit Random number */
-			random32bit = RNG_GetRandomNumber();
-		} else {
-			random32bit = 214013 * random32bit + 2531011;
-		}
+#ifdef HW_RNG
+	if (RNG_GetFlagStatus(RNG_FLAG_DRDY) != RESET) {
+	  /* Get a 32bit Random number */
+	  random32bit = RNG_GetRandomNumber();
+	} else {
+	  random32bit = 214013 * random32bit + 2531011;
+	}
+#else
+	random32bit = 214013 * random32bit + 2531011;
+#endif
 
+#define NEXT_RNG() do {							\
+	  noise[ noiseIndex++ ] = (random32bit & 0xffff) * .000030518f - 1.0f; \
+	  noise[ noiseIndex++ ] = (random32bit >> 16 ) * .000030518f - 1.0f; \
+	  random32bit = 214013 * random32bit + 2531011;			\
+	} while (0)
+
+	for (int noiseIndex = 0; noiseIndex < 32; ) {
+	  NEXT_RNG();
+	  NEXT_RNG();
+	  NEXT_RNG();
+	  NEXT_RNG();
+	  /*
 		float value1 = random32bit & 0xffff;
 		float value2 = random32bit >> 16;
 		float ratioValue = .000030518f;
 		noise[noiseIndex++] = value1 * ratioValue - 1.0f; // value between -1 and 1.
 		noise[noiseIndex++] = value2 * ratioValue - 1.0f; // value between -1 and 1.
+	  */
 	}
-
 	CYCLE_MEASURE_END();
 
 	CYCLE_MEASURE_START(cycles_voices1);
@@ -569,7 +585,7 @@ void Synth::showCycles() {
   lcd.setCursor( 0, 3 );
   lcd.print( "TIM: " );
   lcd.print( cycles_timbres.remove() );
-
+  
   lcd.setRealTimeAction(false);
 }
 #endif
