@@ -54,7 +54,7 @@ public:
     void initVoicePointer(int n, Voice* voice);
     void prepareForNextBlock();
     void cleanNextBlock();
-    void fxAfterBlock(float ratioTimbres);
+    void fxAfterBlock(float ratioTimbres, float *mixBuffer);
     void afterNewParamsLoad();
     void setNewValue(int index, struct ParameterDisplay* param, float newValue);
     void setNewEffecParam(int encoder);

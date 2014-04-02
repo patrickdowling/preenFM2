@@ -433,11 +433,43 @@ void Timbre::cleanNextBlock() {
 	}
 }
 
+#define FLOATCLIP( x, mn, mx )						\
+  if ( unlikely(x > mx) ) x = mx;					\
+  if ( unlikely(x < mn) ) x = mn;					\
 
+#define FLOATCLAMP( x, mn, mx ) (( x > mx ) ? mx : ( x < mn ) ? mn : x )
 
 #define GATE_INC 0.02f
 
-void Timbre::fxAfterBlock(float ratioTimbres) {
+#define BEGIN_SAMPLE_PROCESSING()			\
+  const float *src = sampleBlock;			\
+  const float *rd = mixBuffer;				\
+  float *out = mixBuffer;				\
+  for ( int i = 0; i < BLOCK_SIZE; ++i ) {		\
+  const float left = gateCoef * *src++;			\
+  const float l = *rd++;				\
+  const float right = gateCoef * *src++;		\
+  const float r = *rd++;				\
+  float lout = left;					\
+  float rout = right;					\
+  gateCoef += gateStep;					\
+
+#define END_SAMPLE_PROCESSING()				\
+  lout *= mixerGain;					\
+  rout *= mixerGain;					\
+  *out = l + lout; ++out;				\
+  *out = r + rout; ++out;				\
+  }
+
+
+  //  *out += FLOATCLAMP(lout,-ratioTimbres,ratioTimbres); ++out;	\
+  //  *out += FLOATCLAMP(rout,-ratioTimbres,ratioTimbres); ++out;	\
+  //  }
+
+
+void Timbre::fxAfterBlock(float ratioTimbres, float *mixBuffer) {
+  float gateCoef = 1.0f;
+  float gateStep = 0.0f;
     // Gate algo !!
     float gate = this->matrix.getDestination(MAIN_GATE);
     if (unlikely(gate > 0 || currentGate > 0)) {
@@ -445,14 +477,12 @@ void Timbre::fxAfterBlock(float ratioTimbres) {
 		if (gate > 1.0f) {
 			gate = 1.0f;
 		}
-		float incGate = (gate - currentGate) * .03125f; // ( *.03125f = / 32)
+		float gateStep = (gate - currentGate) * .03125f; // ( *.03125f = / 32)
 		// limit the speed.
-		if (incGate > 0.002f) {
-			incGate = 0.002f;
-		} else if (incGate < -0.002f) {
-			incGate = -0.002f;
-		}
-
+		gateStep = FLOATCLAMP(gateStep,-0.002f,0.002f);
+		gateCoef = 1.0f - currentGate + gateStep;
+		currentGate = gate;
+		/*
 		float *sp = this->sampleBlock;
 		float coef;
     	for (int k=0 ; k< BLOCK_SIZE ; k++) {
@@ -464,8 +494,9 @@ void Timbre::fxAfterBlock(float ratioTimbres) {
 			sp++;
 		}
     //    currentGate = gate;
+    */
     }
-
+    
     // LP Algo
     int effectType = params.effect.type;
     float gainTmp =  params.effect.param3 * numberOfVoiceInverse * ratioTimbres;
@@ -479,53 +510,28 @@ void Timbre::fxAfterBlock(float ratioTimbres) {
 
     	// Low pass... on the Frequency
     	fxParam1 = (fxParamTmp + 9.0f * fxParam1) * .1f;
-    	if (unlikely(fxParam1 > 1.0f)) {
-    		fxParam1 = 1.0f;
-    	}
-    	if (unlikely(fxParam1 < 0.0f)) {
-    		fxParam1 = 0.0f;
-    	}
+	FLOATCLIP( fxParam1, 0.0f, 1.0f );
 
     	float pattern = (1 - fxParam2 * fxParam1);
 
-    	float *sp = this->sampleBlock;
     	float localv0L = v0L;
     	float localv1L = v1L;
     	float localv0R = v0R;
     	float localv1R = v1R;
 
-    	for (int k=0 ; k<BLOCK_SIZE  ; k++) {
-
+	BEGIN_SAMPLE_PROCESSING()  {
     		// Left voice
-    		localv0L =  pattern * localv0L  -  (fxParam1) * localv1L  + (fxParam1)* (*sp);
+    		localv0L =  pattern * localv0L  -  (fxParam1) * localv1L  + (fxParam1)* left;
     		localv1L =  pattern * localv1L  +  (fxParam1) * localv0L;
-
-    		*sp = localv1L * mixerGain;
-
-    		if (unlikely(*sp > ratioTimbres)) {
-    			*sp = ratioTimbres;
-    		}
-    		if (unlikely(*sp < -ratioTimbres)) {
-    			*sp = -ratioTimbres;
-    		}
-
-    		sp++;
+    		lout = localv1L;
 
     		// Right voice
-    		localv0R =  pattern * localv0R  -  (fxParam1)*localv1R  + (fxParam1)* (*sp);
+    		localv0R =  pattern * localv0R  -  (fxParam1)*localv1R  + (fxParam1)* right;
     		localv1R =  pattern * localv1R  +  (fxParam1)*localv0R;
-
-    		*sp = localv1R * mixerGain;
-
-    		if (unlikely(*sp > ratioTimbres)) {
-    			*sp = ratioTimbres;
-    		}
-    		if (unlikely(*sp < -ratioTimbres)) {
-    			*sp = -ratioTimbres;
-    		}
-
-    		sp++;
+    		rout = localv1R;
     	}
+	END_SAMPLE_PROCESSING()
+
     	v0L = localv0L;
     	v1L = localv1L;
     	v0R = localv0R;
@@ -544,44 +550,25 @@ void Timbre::fxAfterBlock(float ratioTimbres) {
     	}
     	float pattern = (1 - fxParam2 * fxParam1);
 
-    	float *sp = this->sampleBlock;
     	float localv0L = v0L;
     	float localv1L = v1L;
     	float localv0R = v0R;
     	float localv1R = v1R;
 
-    	for (int k=0 ; k<BLOCK_SIZE ; k++) {
-
+	BEGIN_SAMPLE_PROCESSING() {
     		// Left voice
-    		localv0L =  pattern * localv0L  -  (fxParam1) * localv1L  + (fxParam1) * (*sp);
+    		localv0L =  pattern * localv0L  -  (fxParam1) * localv1L  + (fxParam1) * left;
     		localv1L =  pattern * localv1L  +  (fxParam1) * localv0L;
-
-    		*sp = (*sp - localv1L) * mixerGain;
-
-    		if (unlikely(*sp > ratioTimbres)) {
-    			*sp = ratioTimbres;
-    		}
-    		if (unlikely(*sp < -ratioTimbres)) {
-    			*sp = -ratioTimbres;
-    		}
-
-    		sp++;
+    		lout = (left - localv1L);
 
     		// Right voice
-    		localv0R =  pattern * localv0R  -  (fxParam1) * localv1R  + (fxParam1) * (*sp);
+    		localv0R =  pattern * localv0R  -  (fxParam1) * localv1R  + (fxParam1) * right;
     		localv1R =  pattern * localv1R  +  (fxParam1) * localv0R;
 
-    		*sp = (*sp - localv1R) * mixerGain;
-
-    		if (unlikely(*sp > ratioTimbres)) {
-    			*sp = ratioTimbres;
-    		}
-    		if (unlikely(*sp < -ratioTimbres)) {
-    			*sp = -ratioTimbres;
-    		}
-
-    		sp++;
+    		rout = (right - localv1R);
     	}
+	END_SAMPLE_PROCESSING()
+
     	v0L = localv0L;
     	v1L = localv1L;
     	v0R = localv0R;
@@ -610,81 +597,47 @@ void Timbre::fxAfterBlock(float ratioTimbres) {
     	//cap= (sample + cap*selectivity )*gain1;
     	//sample = saturate((sample + cap*ratio)*gain2);
 
-    	float *sp = this->sampleBlock;
     	float localv0L = v0L;
     	float localv0R = v0R;
 
-    	for (int k=0 ; k<BLOCK_SIZE ; k++) {
+	BEGIN_SAMPLE_PROCESSING() {
 
-    		localv0L = ((*sp) + localv0L * fxParam1) * fxParam3;
-    		(*sp) = ((*sp) + localv0L * fxParam2) * mixerGain;
+    		localv0L = (left + localv0L * fxParam1) * fxParam3;
+    		lout = (left + localv0L * fxParam2);
 
-    		if (unlikely(*sp > ratioTimbres)) {
-    			*sp = ratioTimbres;
-    		}
-    		if (unlikely(*sp < -ratioTimbres)) {
-    			*sp = -ratioTimbres;
-    		}
-
-    		sp++;
-
-    		localv0R = ((*sp) + localv0R * fxParam1) * fxParam3;
-    		(*sp) = ((*sp) + localv0R * fxParam2) * mixerGain;
-
-    		if (unlikely(*sp > ratioTimbres)) {
-    			*sp = ratioTimbres;
-    		}
-    		if (unlikely(*sp < -ratioTimbres)) {
-    			*sp = -ratioTimbres;
-    		}
-
-    		sp++;
+    		localv0R = (right + localv0R * fxParam1) * fxParam3;
+    		rout = (right + localv0R * fxParam2);
     	}
+	END_SAMPLE_PROCESSING()
+
     	v0L = localv0L;
     	v0R = localv0R;
-
     }
     break;
     case FILTER_MIXER:
     {
     	float pan = params.effect.param1 * 2 - 1.0f ;
-    	float *sp = this->sampleBlock;
-    	float sampleR, sampleL;
-    	if (pan <= 0) {
-        	float onePlusPan = 1 + pan;
-        	float minusPan = - pan;
-        	for (int k=0 ; k<BLOCK_SIZE  ; k++) {
-				sampleL = *(sp);
-				sampleR = *(sp + 1);
-
-				*sp = (sampleL + sampleR * minusPan) * mixerGain;
-				sp++;
-				*sp = sampleR * onePlusPan * mixerGain;
-				sp++;
-			}
-    	} else if (pan > 0) {
-        	float oneMinusPan = 1 - pan;
-        	float adjustedmixerGain = (pan * .5) * mixerGain;
-        	for (int k=0 ; k<BLOCK_SIZE ; k++) {
-				sampleL = *(sp);
-				sampleR = *(sp + 1);
-
-				*sp = sampleL * oneMinusPan * mixerGain;
-				sp++;
-				*sp = (sampleR + sampleL * pan) * mixerGain;
-				sp++;
-			}
-    	}
+	BEGIN_SAMPLE_PROCESSING() {
+	  if (pan <= 0) {
+	    const float onePlusPan = 1.f + pan;
+	    const float minusPan = - pan;
+	    lout = left + right * minusPan;
+	    rout = right * onePlusPan;
+	  } else if (pan > 0) {
+	    const float oneMinusPan = 1.f - pan;
+	    lout = left * oneMinusPan;
+	    rout = right + left * pan;
+	  }
+	}
+	END_SAMPLE_PROCESSING()
     }
+
     break;
     case FILTER_OFF:
     {
-    	// Filter off has gain...
-    	float *sp = this->sampleBlock;
-    	for (int k=0 ; k<BLOCK_SIZE ; k++) {
-			*sp++ = (*sp) * mixerGain;
-			*sp++ = (*sp) * mixerGain;
-		}
+      BEGIN_SAMPLE_PROCESSING() {
+      }
+      END_SAMPLE_PROCESSING()
     }
     break;
     case FILTER_LP4:

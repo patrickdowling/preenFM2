@@ -158,9 +158,6 @@ private:
     void init();
 
     float ratioTimbre;
-
-    float ratioTimbreLP;
-
     int numberOfOsc;
     Voice voices[MAX_NUMBER_OF_VOICES];
     Timbre timbres[NUMBER_OF_TIMBRES];
@@ -170,10 +167,7 @@ private:
     volatile int readCursor;
     volatile int writeCursor;
     int samples[256];
-
-    // gate
-    float currentGate;
-
+    float mixBuffer[BLOCK_SIZE * 2];
 };
 
 

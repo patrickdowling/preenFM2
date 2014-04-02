@@ -195,41 +195,47 @@ void Synth::buildNewSampleBlock() {
 
 
     CYCLE_MEASURE_START(cycles_fx);
+    float *mix = mixBuffer;
+    for ( unsigned i = 0; i < BLOCK_SIZE/2; ++i ) {
+      *mix++ = 131071.f; *mix++ = 131071.f;
+      *mix++ = 131071.f; *mix++ = 131071.f;
+    }
+
     // Add timbre per timbre because gate and eventual other effect are per timbre
     if (likely(timbres[0].params.engine1.numberOfVoice > 0)) {
-        timbres[0].fxAfterBlock(ratioTimbre);
+      timbres[0].fxAfterBlock(ratioTimbre, mixBuffer);
     }
     if (likely(timbres[1].params.engine1.numberOfVoice > 0)) {
-        timbres[1].fxAfterBlock(ratioTimbre);
+      timbres[1].fxAfterBlock(ratioTimbre, mixBuffer);
     }
     if (likely(timbres[2].params.engine1.numberOfVoice > 0)) {
-        timbres[2].fxAfterBlock(ratioTimbre);
+      timbres[2].fxAfterBlock(ratioTimbre, mixBuffer);
     }
     if (likely(timbres[3].params.engine1.numberOfVoice > 0)) {
-        timbres[3].fxAfterBlock(ratioTimbre);
+      timbres[3].fxAfterBlock(ratioTimbre, mixBuffer);
     }
     CYCLE_MEASURE_END();
 
     CYCLE_MEASURE_START(cycles_timbres);
-    const float *sampleFromTimbre1 = timbres[0].getSampleBlock();
-    const float *sampleFromTimbre2 = timbres[1].getSampleBlock();
-    const float *sampleFromTimbre3 = timbres[2].getSampleBlock();
-    const float *sampleFromTimbre4 = timbres[3].getSampleBlock();
+
+#define COPY_FOUR_SAMPLES()			\
+    *cb++ = (int)( *src++ );			\
+    *cb++ = (int)( *src++ );			\
+    *cb++ = (int)( *src++ );			\
+    *cb++ = (int)( *src++ )
 
     int *cb = &samples[writeCursor];
-
-    float toAdd = 131071.0f;
-    for (int s = 0; s < 64/4; s++) {
-        *cb++ = (int)((*sampleFromTimbre1++ + *sampleFromTimbre2++ + *sampleFromTimbre3++ + *sampleFromTimbre4++) + toAdd);
-        *cb++ = (int)((*sampleFromTimbre1++ + *sampleFromTimbre2++ + *sampleFromTimbre3++ + *sampleFromTimbre4++) + toAdd);
-        *cb++ = (int)((*sampleFromTimbre1++ + *sampleFromTimbre2++ + *sampleFromTimbre3++ + *sampleFromTimbre4++) + toAdd);
-        *cb++ = (int)((*sampleFromTimbre1++ + *sampleFromTimbre2++ + *sampleFromTimbre3++ + *sampleFromTimbre4++) + toAdd);
+    const float *src = mixBuffer;
+    for ( unsigned i = 0; i < BLOCK_SIZE/16; i++ ) {
+      COPY_FOUR_SAMPLES();      COPY_FOUR_SAMPLES();
+      COPY_FOUR_SAMPLES();      COPY_FOUR_SAMPLES();
+      COPY_FOUR_SAMPLES();      COPY_FOUR_SAMPLES();
+      COPY_FOUR_SAMPLES();      COPY_FOUR_SAMPLES();
     }
 
     CYCLE_MEASURE_END();
 
     writeCursor = (writeCursor + 64) & 255;
-
 }
 
 void Synth::beforeNewParamsLoad(int timbre) {
