@@ -17,6 +17,7 @@
 
 
 #include <math.h>
+#include "utils/Macros.h"
 #include "Timbre.h"
 #include "Voice.h"
 
@@ -419,23 +420,43 @@ void Timbre::prepareForNextBlock() {
 
 }
 
-void Timbre::cleanNextBlock() {
-	float *sp = this->sampleBlock;
-	while (sp < this->sbMax) {
-		*sp++ = 0;
-		*sp++ = 0;
-		*sp++ = 0;
-		*sp++ = 0;
-		*sp++ = 0;
-		*sp++ = 0;
-		*sp++ = 0;
-		*sp++ = 0;
-	}
+ __attribute__((always_inline)) inline void zeroSampleBuffer( float *samples ) {
+
+  asm volatile ( "mov r1, %[sp]" "\n\t" 
+		 "mov r2, #0" "\n\t"
+		 "mov r3, #0" "\n\t"
+		 "mov r4, #0" "\n\t"
+		 "mov r5, #0" "\n\t"
+		 "mov r6, #0" "\n\t"
+		 "mov r7, #0" "\n\t"
+		 "mov r8, #0" "\n\t"
+		 "mov r9, #0" "\n\t"
+		 "stmia r1!, {r2-r9}" "\n\t"
+		 "stmia r1!, {r2-r9}" "\n\t"
+		 "stmia r1!, {r2-r9}" "\n\t"
+		 "stmia r1!, {r2-r9}" "\n\t"
+		 "stmia r1!, {r2-r9}" "\n\t"
+		 "stmia r1!, {r2-r9}" "\n\t"
+		 "stmia r1!, {r2-r9}" "\n\t"
+		 "stmia r1!, {r2-r9}" "\n\t"
+		 :
+		 : [sp] "r" (samples)
+		 : "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9"
+		 );
 }
 
-#define FLOATCLIP( x, mn, mx )						\
-  if ( unlikely(x > mx) ) x = mx;					\
-  if ( unlikely(x < mn) ) x = mn;					\
+void Timbre::cleanNextBlock() {
+  // zeroSampleBuffer( sampleBlock );
+  float *sb = sampleBlock;
+  for ( unsigned i = 0; i < BLOCK_SIZE/2; ++i ) {
+    *sb++ = 0.f; *sb++ = 0.f;
+    *sb++ = 0.f; *sb++ = 0.f;
+  }
+}
+
+#define FLOATCLIP( x, mn, mx )				\
+  if ( x > mx ) x = mx;					\
+  if ( x < mn ) x = mn;					\
 
 #define FLOATCLAMP( x, mn, mx ) (( x > mx ) ? mx : ( x < mn ) ? mn : x )
 
@@ -470,6 +491,36 @@ void Timbre::cleanNextBlock() {
 void Timbre::fxAfterBlock(float ratioTimbres, float *mixBuffer) {
   float gateCoef = 1.0f;
   float gateStep = 0.0f;
+  
+  float gainTmp =  params.effect.param3 * numberOfVoiceInverse * ratioTimbres;
+  mixerGain = 0.02f * gainTmp + .98f  * mixerGain;
+
+  const float *src = sampleBlock;
+  const float *rd = mixBuffer;
+  float *dst = mixBuffer;
+
+  unsigned i = BLOCK_SIZE*2;
+  do {
+    float left = *src++;
+    left *= gateCoef;
+    //    float right = *src++;
+    //    right *= gateCoef;
+
+    const float l = *rd++;
+    //    float r = *rd++;
+    
+    float lout = left * mixerGain;
+    //    float rout = right * mixerGain;
+
+    lout = FLOATCLAMP(lout,-ratioTimbres,ratioTimbres);
+    //    rout = FLOATCLAMP(rout,-ratioTimbres,ratioTimbres);
+
+    //    rout += r;
+    *dst++ = l + lout;
+    //    *dst++ = r;
+  } while ( --i );
+
+#if 0
     // Gate algo !!
     float gate = this->matrix.getDestination(MAIN_GATE);
     if (unlikely(gate > 0 || currentGate > 0)) {
@@ -720,7 +771,7 @@ void Timbre::fxAfterBlock(float ratioTimbres, float *mixBuffer) {
     	// NO EFFECT
    	break;
     }
-
+#endif
 }
 
 

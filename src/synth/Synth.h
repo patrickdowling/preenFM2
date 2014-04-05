@@ -162,7 +162,7 @@ private:
     Voice voices[MAX_NUMBER_OF_VOICES];
     Timbre timbres[NUMBER_OF_TIMBRES];
 
-    // 4 buffer or 32 stero int = 64*4 = 256
+    // 4 buffer or 32 stereo int = 64*4 = 256
     // sample Buffer
     volatile int readCursor;
     volatile int writeCursor;

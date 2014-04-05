@@ -24,7 +24,7 @@
 #include "hardware/dwt.h"
 
 #ifdef DEBUG
-CYCCNT_buffer cycles_rng, cycles_voices1, cycles_voices2, cycles_fx, cycles_timbres;
+CYCCNT_buffer cycles_rng, cycles_voices1, cycles_voices2, cycles_prep, cycles_fx, cycles_timbres;
 #endif
 
 extern float noise[32];
@@ -116,7 +116,7 @@ void Synth::buildNewSampleBlock() {
 
     // We consider the random number is always ready here...
     uint32_t random32bit = RNG_GetRandomNumber();
-    noise[0] =  (random32bit & 0xffff) * .000030518f - 1.0f; // value between -1 and 1.
+    noise[0] = (random32bit & 0xffff) * .000030518f - 1.0f; // value between -1 and 1.
     noise[1] = (random32bit >> 16) * .000030518f - 1.0f; // value between -1 and 1.
     for (int noiseIndex = 2; noiseIndex<32; ) {
         random32bit = 214013 * random32bit + 2531011;
@@ -194,17 +194,48 @@ void Synth::buildNewSampleBlock() {
     CYCLE_MEASURE_END();
 
 
-    CYCLE_MEASURE_START(cycles_fx);
+    CYCLE_MEASURE_START(cycles_prep);
     float *mix = mixBuffer;
+#if 0
+    // PREP: 111 | 240
+    asm volatile ( "mov r1, %[dst]" "\n\t"
+		   "mov r2, %[val]" "\n\t"
+		   "mov r3, %[val]" "\n\t"
+		   "mov r4, %[val]" "\n\t"
+		   "mov r5, %[val]" "\n\t"
+		   "mov r6, %[val]" "\n\t"
+		   "mov r7, %[val]" "\n\t"
+		   "mov r8, %[val]" "\n\t"
+		   "mov r9, %[val]" "\n\t"
+
+		   "stmia r1!, {r2-r9}" "\n\t"
+		   "stmia r1!, {r2-r9}" "\n\t"
+		   "stmia r1!, {r2-r9}" "\n\t"
+		   "stmia r1!, {r2-r9}" "\n\t"
+		   "stmia r1!, {r2-r9}" "\n\t"
+		   "stmia r1!, {r2-r9}" "\n\t"
+		   "stmia r1!, {r2-r9}" "\n\t"
+		   "stmia r1!, {r2-r9}" "\n\t"
+		   : [dst] "+r" (mix)
+		   : [val] "r" (131071.f)
+		   : "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9"
+		 );
+#else
+    // PREP: 105 | 230
     for ( unsigned i = 0; i < BLOCK_SIZE/2; ++i ) {
       *mix++ = 131071.f; *mix++ = 131071.f;
       *mix++ = 131071.f; *mix++ = 131071.f;
     }
+#endif
+    CYCLE_MEASURE_END();
+
+    CYCLE_MEASURE_START(cycles_fx);
 
     // Add timbre per timbre because gate and eventual other effect are per timbre
     if (likely(timbres[0].params.engine1.numberOfVoice > 0)) {
       timbres[0].fxAfterBlock(ratioTimbre, mixBuffer);
     }
+    /*
     if (likely(timbres[1].params.engine1.numberOfVoice > 0)) {
       timbres[1].fxAfterBlock(ratioTimbre, mixBuffer);
     }
@@ -214,9 +245,89 @@ void Synth::buildNewSampleBlock() {
     if (likely(timbres[3].params.engine1.numberOfVoice > 0)) {
       timbres[3].fxAfterBlock(ratioTimbre, mixBuffer);
     }
+    */
     CYCLE_MEASURE_END();
 
     CYCLE_MEASURE_START(cycles_timbres);
+
+#define ASM_FINAL_MIX
+#ifdef ASM_FINAL_MIX
+
+    // TIM: 292 | 380
+    float *src = mixBuffer;
+    int *dst = &samples[writeCursor];
+    unsigned count = BLOCK_SIZE * 2; // stereo samples
+    asm volatile( "\n\t" 
+		  "mov r1, %[src]" "\n\t"
+		  "mov r2, %[dst]" "\n\t"
+		  "mov r3, %[count]" "\n\t"
+		  "1:" "\n\t"
+		  "vldmia.32 r1!, {s1-s8}" "\n\t"
+		  "vcvt.s32.f32 s9, s1" "\n\t"
+		  "vcvt.s32.f32 s10, s2" "\n\t"
+		  "vcvt.s32.f32 s11, s3" "\n\t"
+		  "vcvt.s32.f32 s12, s4" "\n\t"
+		  "vcvt.s32.f32 s13, s5" "\n\t"
+		  "vcvt.s32.f32 s14, s6" "\n\t"
+		  "vcvt.s32.f32 s15, s7" "\n\t"
+		  "vcvt.s32.f32 s16, s8" "\n\t"
+		  "vstmia.32 r2!, {s9-s16}" "\n\t"
+		  "subs r3, #8" "\n\t"
+		  "bhi 1b" "\n\t"
+		  : [src] "+r" (src), [dst] "+r" (dst)
+		  : [count] "r" (count)
+		  : "r1", "r2", "r3", "s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11", "s12", "s13", "s14", "s15", "s16"
+		  );
+
+    /*
+    // TIM: 328 | 420
+    asm volatile( "\n\t" 
+		  "mov r1, %[src]" "\n\t"
+		  "mov r2, %[dst]" "\n\t"
+		  "mov r3, %[count]" "\n\t"
+		  "1:" "\n\t"
+		  "vldr s1, [r1, #0]" "\n\t"
+		  "vldr s2, [r1, #4]" "\n\t"
+		  "vldr s3, [r1, #8]" "\n\t"
+		  "vldr s4, [r1, #12]" "\n\t"
+
+		  "vcvt.s32.f32 s9, s1" "\n\t"
+		  "vcvt.s32.f32 s10, s2" "\n\t"
+		  "vcvt.s32.f32 s11, s3" "\n\t"
+		  "vcvt.s32.f32 s12, s4" "\n\t"
+
+		  "vstr s9, [r2, #0]" "\n\t"
+		  "vstr s10, [r2, #4]" "\n\t"
+		  "vstr s11, [r2, #8]" "\n\t"
+		  "vstr s12, [r2, #12]" "\n\t"
+
+		  "vldr s5, [r1, #16]" "\n\t"
+		  "vldr s6, [r1, #20]" "\n\t"
+		  "vldr s7, [r1, #24]" "\n\t"
+		  "vldr s8, [r1, #28]" "\n\t"
+
+		  "vcvt.s32.f32 s13, s5" "\n\t"
+		  "vcvt.s32.f32 s14, s6" "\n\t"
+		  "vcvt.s32.f32 s15, s7" "\n\t"
+		  "vcvt.s32.f32 s16, s8" "\n\t"
+
+		  "vstr s13, [r2, #16]" "\n\t"
+		  "vstr s14, [r2, #20]" "\n\t"
+		  "vstr s15, [r2, #24]" "\n\t"
+		  "vstr s16, [r2, #28]" "\n\t"
+
+		  "adds r1, #32" "\n\t"
+		  "adds r2, #32" "\n\t"
+		  "subs r3, #8" "\n\t"
+		  "bhi 1b" "\n\t"
+		  : [src] "+r" (src), [dst] "+r" (dst)
+		  : [count] "r" (count)
+		  : "r1", "r2", "r3", "s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11", "s12", "s13", "s14", "s15", "s16"
+		  );
+    */
+
+#else
+    // TIM: 580 | 600
 
 #define COPY_FOUR_SAMPLES()			\
     *cb++ = (int)( *src++ );			\
@@ -232,7 +343,7 @@ void Synth::buildNewSampleBlock() {
       COPY_FOUR_SAMPLES();      COPY_FOUR_SAMPLES();
       COPY_FOUR_SAMPLES();      COPY_FOUR_SAMPLES();
     }
-
+#endif
     CYCLE_MEASURE_END();
 
     writeCursor = (writeCursor + 64) & 255;
@@ -579,10 +690,14 @@ void Synth::showCycles() {
     lcd.setCursor( 0, 2 );
     lcd.print( "FX : " );
     lcd.print( cycles_fx.remove() );
+    lcd.print( " PREP: " );
+    lcd.print( cycles_prep.remove() );
 
     lcd.setCursor( 0, 3 );
     lcd.print( "TIM: " );
     lcd.print( cycles_timbres.remove() );
+    lcd.print( " " );
+    lcd.print( (int)samples );
 
     lcd.setRealTimeAction(false);
 }

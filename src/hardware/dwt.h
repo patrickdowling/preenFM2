@@ -18,6 +18,7 @@
 #ifndef DWT_H_
 #define DWT_H_
 
+#include "utils/Macros.h"
 #include "utils/RingBuffer.h"
 
 #define REG_DWT_CONTROL 0xE0001000
@@ -61,17 +62,14 @@ private:
     CYCCNT_buffer &buffer;
 };
 
-#define MACRO_CONCAT_(x,y) x##y
-#define MACRO_CONCAT(x,y) MACRO_CONCAT_(x,y)
-
 #ifdef DEBUG
-#define CYCLE_MEASURE_START( x )			\
-        {							\
-            scoped_cyccnt MACRO_CONCAT(CYCNT_,__COUNTER__)( x );	\
-            do {} while(0)
+#define CYCLE_MEASURE_START( x )					\
+  do {									\
+  scoped_cyccnt MACRO_CONCAT(CYCNT_,__COUNTER__)( x )			\
 
 #define CYCLE_MEASURE_END()			\
-        }
+  } while (0)
+
 #else
 #define CYCLE_MEASURE_START( x ) do {} while(0)
 #define CYCLE_MEASURE_END() do {} while(0)
