@@ -446,6 +446,7 @@ void Timbre::prepareForNextBlock() {
 }
 
 void Timbre::cleanNextBlock() {
+#if 0
 	float *sp = this->sampleBlock;
 	while (sp < this->sbMax) {
 		*sp++ = 0;
@@ -457,13 +458,16 @@ void Timbre::cleanNextBlock() {
 		*sp++ = 0;
 		*sp++ = 0;
 	}
-#if 0
-  // zeroSampleBuffer( sampleBlock );
+#endif
+#if 1
+   zeroSampleBuffer( sampleBlock );
+/*
   float *sb = sampleBlock;
   for ( unsigned i = 0; i < BLOCK_SIZE/2; ++i ) {
     *sb++ = 0.f; *sb++ = 0.f;
     *sb++ = 0.f; *sb++ = 0.f;
   }
+*/
 #endif
 }
 
@@ -500,90 +504,130 @@ void Timbre::cleanNextBlock() {
   //  *out += FLOATCLAMP(rout,-ratioTimbres,ratioTimbres); ++out;	\
   //  }
 
+#define USE_ASM_CLIP
+#define USE_ASM_PAN
+//#define USE_PREMULT_GAIN
 
 void Timbre::fxAfterBlock(float ratioTimbres, float *mixBuffer) {
-  float gateCoef = 1.0f;
-  float gateStep = 0.0f;
   
   float gainTmp =  params.effect.param3 * numberOfVoiceInverse * ratioTimbres;
   mixerGain = 0.02f * gainTmp + .98f  * mixerGain;
 
-  const float *src = sampleBlock;
-  const float *rd = mixBuffer;
-  float *dst = mixBuffer;
-  int count = BLOCK_SIZE * 2 - 1;
+  register const float *src asm ("r1" ) = sampleBlock;
+  register float *dst asm ("r2") = mixBuffer;
+  register int count asm ("r3") = BLOCK_SIZE * 2 - 1;
 
-#define ASMCLIP(reg)				\
-  "vcmp.f32 "STRINGIFY(reg)", s2" "\n\t"	\
-    "vmrs APSR_nzcv, fpscr" "\n\t"		\
-    "it gt" "\n\t"				\
-    "vmovgt.f32 "STRINGIFY(reg)", s2" "\n\t"	\
-    "vcmp.f32 "STRINGIFY(reg)", s3" "\n\t"	\
-    "vmrs APSR_nzcv, fpscr" "\n\t"		\
-    "it lt" "\n\t"				\
-    "vmovlt.f32 "STRINGIFY(reg)", s3" "\n\t"	\
+  register float gateCoef asm ("s0") = 1.0f;
+  register float gateStep asm ("s1") = 0.0f;
+  register float gain asm ("s2" ) = mixerGain;
+  register float clip asm ("s3") = ratioTimbres;
+  register float clipn asm ("s4") = -ratioTimbres;
+
+#ifdef USE_ASM_CLIP
+#define ASMCLIP(reg)					\
+  "vcmp.f32 "STRINGIFY(reg)", %[clip]" "\n\t"		\
+    "vmrs APSR_nzcv, fpscr" "\n\t"			\
+    "it gt" "\n\t"					\
+    "vmovgt.f32 "STRINGIFY(reg)", %[clip]" "\n\t"	\
+    "vcmp.f32 "STRINGIFY(reg)", %[clipn]" "\n\t"	\
+    "vmrs APSR_nzcv, fpscr" "\n\t"			\
+    "it lt" "\n\t"					\
+    "vmovlt.f32 "STRINGIFY(reg)", %[clipn]" "\n\t"	\
     ""
+#else
+#define ASMCLIP(reg)
+#endif
+
+  float pan = params.effect.param1 * 2 - 1.0f ;
+  register float pan_ll asm ("s16");
+  register float pan_lr asm ("s17");
+  register float pan_rl asm ("s18");
+  register float pan_rr asm ("s19");
+
+  if ( pan < 0.0f ) {
+    pan_ll = 1.f;
+    pan_lr = -pan;
+    pan_rl = 0.f;
+    pan_rr = (1.f + pan);
+  } else {
+    pan_ll = (1.f - pan);
+    pan_lr = 0.f;
+    pan_rl = pan;
+    pan_rr = 1.f;
+  }
+
+#ifdef USE_PREMULT_GAIN
+  pan_ll *= mixerGain; pan_lr *= mixerGain;
+  pan_rl *= mixerGain; pan_rr *= mixerGain;
+#endif
 
 // TODO Clip, gateStep
+// TODO premult pan with gain
 #if 1
   asm volatile ( "\n\t"
-		 "mov r1, %[src]" "\n\t"
-		 "mov r2, %[dst]" "\n\t"
-		 "mov r3, %[count]" "\n\t"
-		 "vmov s0, %[gate]" "\n\t"
-		 "vmov s1, %[gain]" "\n\t"
-		 "vmov s2, %[clip]" "\n\t"
-		 "vneg.f32 s3, s2" "\n\t"
-		 "vmov s4, %[step]" "\n\t"
-		 ""
 		 "1:" "\n\t"
 
 		 "vldmia r1!, {s8-s11}" "\n\t"
 
-		 "vmul.f32 s8, s8, s0" "\n\t" // sample = src * gate
-		 "vmul.f32 s9, s9, s0" "\n\t"
-		 "vmul.f32 s10, s10, s0" "\n\t"
-		 "vmul.f32 s11, s11, s0" "\n\t"
+		 "vmul.f32 s8, s8, %[gate]" "\n\t" // sample = src * gate
+		 "vmul.f32 s9, s9, %[gate]" "\n\t"
+		 "vmul.f32 s10, s10, %[gate]" "\n\t"
+		 "vmul.f32 s11, s11, %[gate]" "\n\t"
 
-		 "vmul.f32 s8, s8, s1" "\n\t" // sample = sample * gain
-		 "vmul.f32 s9, s9, s1" "\n\t" // sample = sample * gain
-		 "vmul.f32 s10, s10, s1" "\n\t" // sample = sample * gain
-		 "vmul.f32 s11, s11, s1" "\n\t" // sample = sample * gain
+#ifdef USE_ASM_PAN
+		 // NOTE TO SELF: This looks like a case for vmla, but that turns out slower...
 
+		 "vmul.f32 s20, s8, %[pan_ll]" "\n\t" // l * pan_ll
+		 "vmul.f32 s21, s9, %[pan_lr]" "\n\t" // r * pan_lr
+		 "vmul.f32 s22, s8, %[pan_rl]" "\n\t" // l * pan_rl
+		 "vmul.f32 s23, s9, %[pan_rr]" "\n\t" // r * pan_rr
+
+		 "vmul.f32 s20, s10, %[pan_ll]" "\n\t" // l * pan_ll
+		 "vmul.f32 s21, s11, %[pan_lr]" "\n\t" // r * pan_lr
+		 "vmul.f32 s22, s10, %[pan_rl]" "\n\t" // l * pan_rl
+		 "vmul.f32 s23, s11, %[pan_rr]" "\n\t" // r * pan_rr
+
+		 "vadd.f32 s8, s20, s21" "\n\t" // l = l * pan_ll + r * pan_lr
+		 "vadd.f32 s9, s22, s23" "\n\t" // r = l * pan_rl + r * pan_rr
+		 "vadd.f32 s10, s20, s21" "\n\t" // l = l * pan_ll + r * pan_lr
+		 "vadd.f32 s11, s22, s23" "\n\t" // r = l * pan_rl + r * pan_rr
+#endif
+#ifndef USE_PREMULT_GAIN
+		 "vmul.f32 s8, s8, %[gain]" "\n\t" // sample = sample * gain
+		 "vmul.f32 s9, s9, %[gain]" "\n\t" // sample = sample * gain
+		 "vmul.f32 s10, s10, %[gain]" "\n\t" // sample = sample * gain
+		 "vmul.f32 s11, s11, %[gain]" "\n\t" // sample = sample * gain
+#endif
 		 "vldmia r2, {s12-s15}" "\n\t"
 
-		 //Clip 
+		 //Clip (may be nop)
 		 ASMCLIP(s8)
 		 ASMCLIP(s9)
 		 ASMCLIP(s10)
 		 ASMCLIP(s11)
 
-#if 0
-		 "vcmp.f32 s8, s2" "\n\t"
-		 "vmrs APSR_nzcv, fpscr" "\n\t"
-		 "it gt" "\n\t"
-		 "vmovgt.f32 s8, s2" "\n\t"
-		 "vcmp.f32 s8, s3" "\n\t"
-		 "vmrs APSR_nzcv, fpscr" "\n\t"
-		 "it lt" "\n\t"
-		 "vmovlt.f32 s8, s3" "\n\t"
-#endif
+		 // TODO Can we avoid extra clip, assign then add by adding directly during clip? Might save 1-2 cycles
+
 		 "vadd.f32 s12, s12, s8" "\n\t"
 		 "vadd.f32 s13, s13, s9" "\n\t"
 		 "vadd.f32 s14, s14, s10" "\n\t"
 		 "vadd.f32 s15, s15, s11" "\n\t"
-		 "vadd.f32 s0, s0, s1" "\n\t"
 
 		 "vstmia r2!, {s12-s15}" "\n\t"
 
-		 "subs r3, #4" "\n\t"
+		 "vadd.f32 %[gate], %[gate], %[step]" "\n\t"
+		 "subs %[count], #4" "\n\t"
 		 "bhi 1b" "\n\t"
-		 : [src] "+r" (src), [dst] "+r" (dst)
-		 : [count] "r" (count), [gate] "r" (gateCoef), [gain] "r" (mixerGain), [clip] "r" (ratioTimbres), [step] "r" (gateStep)
-		 : "r1", "r2", "r3", "r4", "s0", "s1", "s2", "s3", "s8", "s9", "s10", "s11", "s12", "s13", "s14", "s15"
+		 
+		 : [src] "+r" (src), [dst] "+r" (dst), [gate] "+w" (gateCoef)
+		 : [count] "r" (count), [step] "w" (gateStep),  [gain] "w" (mixerGain), [clip] "w" (clip), [clipn] "w" (clipn),
+		   [pan_ll] "w" (pan_ll), [pan_lr] "w" (pan_lr), [pan_rl] "w" (pan_rl), [pan_rr] "w" (pan_rr)
+		 : "s8", "s9", "s10", "s11", "s12", "s13", "s14", "s15"
 		 );
 #endif
 #if 0
+  //  const float *rd = mixBuffer;
+
   unsigned i = BLOCK_SIZE*2;
   do {
     float left = *src++;
