@@ -166,8 +166,8 @@ private:
     // sample Buffer
     volatile int readCursor;
     volatile int writeCursor;
-    int samples[256];
-    float mixBuffer[BLOCK_SIZE * 2];
+    int samples[256] __attribute__((aligned(4)));
+    float mixBuffer[BLOCK_SIZE * 2] __attribute__((aligned(4)));
 };
 
 

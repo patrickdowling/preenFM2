@@ -446,12 +446,25 @@ void Timbre::prepareForNextBlock() {
 }
 
 void Timbre::cleanNextBlock() {
+	float *sp = this->sampleBlock;
+	while (sp < this->sbMax) {
+		*sp++ = 0;
+		*sp++ = 0;
+		*sp++ = 0;
+		*sp++ = 0;
+		*sp++ = 0;
+		*sp++ = 0;
+		*sp++ = 0;
+		*sp++ = 0;
+	}
+#if 0
   // zeroSampleBuffer( sampleBlock );
   float *sb = sampleBlock;
   for ( unsigned i = 0; i < BLOCK_SIZE/2; ++i ) {
     *sb++ = 0.f; *sb++ = 0.f;
     *sb++ = 0.f; *sb++ = 0.f;
   }
+#endif
 }
 
 #define FLOATCLIP( x, mn, mx )				\
@@ -500,6 +513,17 @@ void Timbre::fxAfterBlock(float ratioTimbres, float *mixBuffer) {
   float *dst = mixBuffer;
   int count = BLOCK_SIZE * 2 - 1;
 
+#define ASMCLIP(reg)				\
+  "vcmp.f32 "STRINGIFY(reg)", s2" "\n\t"	\
+    "vmrs APSR_nzcv, fpscr" "\n\t"		\
+    "it gt" "\n\t"				\
+    "vmovgt.f32 "STRINGIFY(reg)", s2" "\n\t"	\
+    "vcmp.f32 "STRINGIFY(reg)", s3" "\n\t"	\
+    "vmrs APSR_nzcv, fpscr" "\n\t"		\
+    "it lt" "\n\t"				\
+    "vmovlt.f32 "STRINGIFY(reg)", s3" "\n\t"	\
+    ""
+
 // TODO Clip, gateStep
 #if 1
   asm volatile ( "\n\t"
@@ -510,34 +534,29 @@ void Timbre::fxAfterBlock(float ratioTimbres, float *mixBuffer) {
 		 "vmov s1, %[gain]" "\n\t"
 		 "vmov s2, %[clip]" "\n\t"
 		 "vneg.f32 s3, s2" "\n\t"
+		 "vmov s4, %[step]" "\n\t"
 		 ""
 		 "1:" "\n\t"
-#if USE_LDR
-		 "vldr s8, [r1, #0]" "\n\t" // src
-		 "vldr s9, [r1, #4]" "\n\t"
-		 "vldr s10, [r1, #8]" "\n\t"
-		 "vldr s11, [r1, #12]" "\n\t"
-#else
+
 		 "vldmia r1!, {s8-s11}" "\n\t"
-#endif
+
 		 "vmul.f32 s8, s8, s0" "\n\t" // sample = src * gate
 		 "vmul.f32 s9, s9, s0" "\n\t"
 		 "vmul.f32 s10, s10, s0" "\n\t"
 		 "vmul.f32 s11, s11, s0" "\n\t"
 
-		 "vmul.f32 s8, s8, s1" "\n\t" // sample = sample * gai
+		 "vmul.f32 s8, s8, s1" "\n\t" // sample = sample * gain
 		 "vmul.f32 s9, s9, s1" "\n\t" // sample = sample * gain
 		 "vmul.f32 s10, s10, s1" "\n\t" // sample = sample * gain
 		 "vmul.f32 s11, s11, s1" "\n\t" // sample = sample * gain
 
-#if USE_LDR
-		 "vldr s12, [r2, #0]" "\n\t" // dest
-		 "vldr s13, [r2, #4]" "\n\t" // dest
-		 "vldr s14, [r2, #8]" "\n\t" // dest
-		 "vldr s15, [r2, #12]" "\n\t" // dest
-#else
 		 "vldmia r2, {s12-s15}" "\n\t"
-#endif
+
+		 //Clip 
+		 ASMCLIP(s8)
+		 ASMCLIP(s9)
+		 ASMCLIP(s10)
+		 ASMCLIP(s11)
 
 #if 0
 		 "vcmp.f32 s8, s2" "\n\t"
@@ -550,26 +569,18 @@ void Timbre::fxAfterBlock(float ratioTimbres, float *mixBuffer) {
 		 "vmovlt.f32 s8, s3" "\n\t"
 #endif
 		 "vadd.f32 s12, s12, s8" "\n\t"
-		 "vadd.f32 s13, s13, s8" "\n\t"
-		 "vadd.f32 s14, s14, s8" "\n\t"
-		 "vadd.f32 s15, s15, s8" "\n\t"
+		 "vadd.f32 s13, s13, s9" "\n\t"
+		 "vadd.f32 s14, s14, s10" "\n\t"
+		 "vadd.f32 s15, s15, s11" "\n\t"
+		 "vadd.f32 s0, s0, s1" "\n\t"
 
-#if USE_LDR
-		 "vstr s12, [r2, #0]" "\n\t"
-		 "vstr s13, [r2, #4]" "\n\t"
-		 "vstr s14, [r2, #8]" "\n\t"
-		 "vstr s15, [r2, #12]" "\n\t"
-
-		 "adds r1, #16" "\n\t"
-		 "adds r2, #16" "\n\t"
-#else
 		 "vstmia r2!, {s12-s15}" "\n\t"
-#endif
+
 		 "subs r3, #4" "\n\t"
 		 "bhi 1b" "\n\t"
 		 : [src] "+r" (src), [dst] "+r" (dst)
-		 : [count] "r" (count), [gate] "r" (gateCoef), [gain] "r" (mixerGain), [clip] "r" (ratioTimbres)
-		 : "r1", "r2", "r3", "s0", "s1", "s2", "s3", "s8", "s9", "s10", "s11", "s12", "s13", "s14", "s15"
+		 : [count] "r" (count), [gate] "r" (gateCoef), [gain] "r" (mixerGain), [clip] "r" (ratioTimbres), [step] "r" (gateStep)
+		 : "r1", "r2", "r3", "r4", "s0", "s1", "s2", "s3", "s8", "s9", "s10", "s11", "s12", "s13", "s14", "s15"
 		 );
 #endif
 #if 0
