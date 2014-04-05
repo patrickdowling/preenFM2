@@ -24,7 +24,7 @@
 #include "hardware/dwt.h"
 
 #ifdef DEBUG
-CYCCNT_buffer cycles_rng, cycles_voices1, cycles_voices2, cycles_prep, cycles_fx, cycles_timbres;
+CYCCNT_buffer cycles_rng, cycles_voices1, cycles_voices2, cycles_fx, cycles_timbres;
 #endif
 
 extern float noise[32];
@@ -194,7 +194,8 @@ void Synth::buildNewSampleBlock() {
     CYCLE_MEASURE_END();
 
 
-    CYCLE_MEASURE_START(cycles_prep);
+    CYCLE_MEASURE_START(cycles_fx);
+
     float *mix = mixBuffer;
 #if 0
     // PREP: 111 | 240
@@ -227,15 +228,11 @@ void Synth::buildNewSampleBlock() {
       *mix++ = 131071.f; *mix++ = 131071.f;
     }
 #endif
-    CYCLE_MEASURE_END();
-
-    CYCLE_MEASURE_START(cycles_fx);
 
     // Add timbre per timbre because gate and eventual other effect are per timbre
     if (likely(timbres[0].params.engine1.numberOfVoice > 0)) {
       timbres[0].fxAfterBlock(ratioTimbre, mixBuffer);
     }
-    /*
     if (likely(timbres[1].params.engine1.numberOfVoice > 0)) {
       timbres[1].fxAfterBlock(ratioTimbre, mixBuffer);
     }
@@ -245,7 +242,7 @@ void Synth::buildNewSampleBlock() {
     if (likely(timbres[3].params.engine1.numberOfVoice > 0)) {
       timbres[3].fxAfterBlock(ratioTimbre, mixBuffer);
     }
-    */
+
     CYCLE_MEASURE_END();
 
     CYCLE_MEASURE_START(cycles_timbres);
@@ -690,14 +687,10 @@ void Synth::showCycles() {
     lcd.setCursor( 0, 2 );
     lcd.print( "FX : " );
     lcd.print( cycles_fx.remove() );
-    lcd.print( " PREP: " );
-    lcd.print( cycles_prep.remove() );
 
     lcd.setCursor( 0, 3 );
     lcd.print( "TIM: " );
     lcd.print( cycles_timbres.remove() );
-    lcd.print( " " );
-    lcd.print( (int)samples );
 
     lcd.setRealTimeAction(false);
 }
