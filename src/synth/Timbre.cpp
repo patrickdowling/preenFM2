@@ -510,6 +510,8 @@ void Timbre::fxAfterBlock(float ratioTimbres, float *mixBuffer) {
   mixerGain = 0.02f * gainTmp + .98f  * mixerGain;
   const float pan = params.effect.param1 * 2 - 1.0f ;
 
+  // TODO Gate
+
   struct sample_buffer_fx buffer = { sampleBlock,
 				     mixBuffer,
 				     BLOCK_SIZE * 2,
@@ -531,11 +533,9 @@ void Timbre::fxAfterBlock(float ratioTimbres, float *mixBuffer) {
     	float pattern = (1 - fxParam2 * fxParam1);
 
 	struct filter_values values = { pattern, fxParam1, fxParam2, { v0L, v1L, v0R, v1R } };
-	__fxProcessBufferLP( &buffer, 0, 1, &values );
-	v0L = values.v[0];
-	v1L = values.v[1];
-	v0R = values.v[2];
-	v1R = values.v[3];	
+	__fxProcessBufferLP( &buffer, 0, 1, &values ); // no pan (might depend on #define), but clip
+	v0L = values.v[0]; v1L = values.v[1];
+	v0R = values.v[2]; v1R = values.v[3];	
     }
     break;
   case FILTER_MIXER:

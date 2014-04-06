@@ -3,6 +3,8 @@
 #include "TimbreFX.h"
 #include "Voice.h"
 
+//#define LP_ENABLE_PAN
+
 /**
  * Assuming -1.f < pan < 1.f, calculate coefficients to calculate
  * l' = pan_ll * l + pan_lr * r
@@ -169,8 +171,10 @@ void __fxProcessBufferLP( const struct sample_buffer_fx *buffer, int _enablePan,
   float gain = buffer->mixerGain;
   float clip = buffer->clip;
   float pan_ll, pan_lr, pan_rl, pan_rr;
+#if LP_ENABLE_PAN
   if ( _enablePan )
     __calcPanCoefficients( buffer->pan, pan_ll, pan_lr, pan_rl, pan_rr );
+#endif
 
   asm volatile ( "\n\t"
 		 "vldmia %[values], {s24-s27}" "\n\t" // get localvxx values v0l, v1l, v0r, v1r
@@ -202,7 +206,7 @@ void __fxProcessBufferLP( const struct sample_buffer_fx *buffer, int _enablePan,
 		 "vadd.f32 s25, s25, s20" "\n\t" // L: v1 += fxParam1 * v0
 		 "vadd.f32 s27, s27, s22" "\n\t" // R: v1 += fxParam1 * v0
 		 "vmov.f32 s8, s25" "\n\t" // L: sample = v1
-		 "vmov.f32 s9, s27" "\n\t" // L: sample = v1
+		 "vmov.f32 s9, s27" "\n\t" // R: sample = v1
 
 		 "vmul.f32 s20, %[fxParam1], s10" "\n\t" // L: fxParam1 * sample
 		 "vmul.f32 s22, %[fxParam1], s11" "\n\t" // R: fxParam1 * sample
@@ -221,8 +225,9 @@ void __fxProcessBufferLP( const struct sample_buffer_fx *buffer, int _enablePan,
 		 "vadd.f32 s25, s25, s20" "\n\t" // L: v1 += fxParam1 * v0
 		 "vadd.f32 s27, s27, s22" "\n\t" // R: v1 += fxParam1 * v0
 		 "vmov.f32 s10, s25" "\n\t" // L: sample = v1
-		 "vmov.f32 s11, s27" "\n\t" // L: sample = v1
+		 "vmov.f32 s11, s27" "\n\t" // R: sample = v1
 
+#if LP_ENABLE_PAN
 		 // ------------------------------------------------------------
 		 // Pan
 
@@ -243,7 +248,7 @@ void __fxProcessBufferLP( const struct sample_buffer_fx *buffer, int _enablePan,
 		 "vadd.f32 s10, s20, s21" "\n\t" // l = l * pan_ll + r * pan_lr
 		 "vadd.f32 s11, s22, s23" "\n\t" // r = l * pan_rl + r * pan_rr
 		 "1:" "\n\t"
-
+#endif
 		 // ------------------------------------------------------------
 		 // gain
 
