@@ -516,8 +516,7 @@ void Timbre::fxAfterBlock(float ratioTimbres, float *mixBuffer) {
 				     1.0f, 0.0f,
 				     mixerGain,
 				     ratioTimbres,
-				     pan
-  };
+				     pan };
 
   switch( (int)params.effect.type ) {
   case FILTER_LP:
