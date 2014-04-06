@@ -504,26 +504,6 @@ void Timbre::cleanNextBlock() {
   //  *out += FLOATCLAMP(rout,-ratioTimbres,ratioTimbres); ++out;	\
   //  }
 
-#define USE_ASM_CLIP
-#define USE_ASM_PAN
-//#define USE_PREMULT_GAIN
-
-void Timbre::fxAfterBlock(float ratioTimbres, float *mixBuffer) {
-  
-  float gainTmp =  params.effect.param3 * numberOfVoiceInverse * ratioTimbres;
-  mixerGain = 0.02f * gainTmp + .98f  * mixerGain;
-
-  register const float *src asm ("r1" ) = sampleBlock;
-  register float *dst asm ("r2") = mixBuffer;
-  register int count asm ("r3") = BLOCK_SIZE * 2 - 1;
-
-  register float gateCoef asm ("s0") = 1.0f;
-  register float gateStep asm ("s1") = 0.0f;
-  register float gain asm ("s2" ) = mixerGain;
-  register float clip asm ("s3") = ratioTimbres;
-  register float clipn asm ("s4") = -ratioTimbres;
-
-#ifdef USE_ASM_CLIP
 #define ASMCLIP(reg)					\
   "vcmp.f32 "STRINGIFY(reg)", %[clip]" "\n\t"		\
     "vmrs APSR_nzcv, fpscr" "\n\t"			\
@@ -534,16 +514,25 @@ void Timbre::fxAfterBlock(float ratioTimbres, float *mixBuffer) {
     "it lt" "\n\t"					\
     "vmovlt.f32 "STRINGIFY(reg)", %[clipn]" "\n\t"	\
     ""
-#else
-#define ASMCLIP(reg)
-#endif
+struct sample_buffer_fx {
+  const float *src;		// source buffer
+  float *dst;			// destination buffer
+  unsigned count;		// total number of samples
 
-  float pan = params.effect.param1 * 2 - 1.0f ;
-  register float pan_ll asm ("s16");
-  register float pan_lr asm ("s17");
-  register float pan_rl asm ("s18");
-  register float pan_rr asm ("s19");
+  float gateCoef;		// starting gate coefficient value
+  float gateStep;		// gate step
+  float mixerGain;		// mixer gain
+  float clip;			// positive clip value
+  float pan;			// panning
+};
 
+/**
+ * Assuming -1.f < pan < 1.f, calculate coefficients to calculate
+ * l' = pan_ll * l + pan_lr * r
+ * r' = pan_rl * l + pan_rr * r
+ */
+static inline void __calcPanCoefficients( float pan, float &pan_ll, float &pan_lr, float &pan_rl, float &pan_rr )
+{
   if ( pan < 0.0f ) {
     pan_ll = 1.f;
     pan_lr = -pan;
@@ -555,28 +544,40 @@ void Timbre::fxAfterBlock(float ratioTimbres, float *mixBuffer) {
     pan_rl = pan;
     pan_rr = 1.f;
   }
+}
 
-#ifdef USE_PREMULT_GAIN
-  pan_ll *= mixerGain; pan_lr *= mixerGain;
-  pan_rl *= mixerGain; pan_rr *= mixerGain;
-#endif
+/**
+ * Sample buffer processing
+ */
+template <bool _enablePan, bool _enableClip>
+__attribute__((always_inline)) inline void __fxProcessBuffer( const struct sample_buffer_fx *buffer )
+{
+  const float *src  = buffer->src;
+  float *dst = buffer->dst;
+  unsigned count = buffer->count;
 
-// TODO Clip, gateStep
-// TODO premult pan with gain
-#if 1
+  float gateCoef = buffer->gateCoef;
+  float gateStep = buffer->gateStep;
+  float gain = buffer->mixerGain;
+  float clip = buffer->clip;
+  float clipn = -buffer->clip;
+  int doclip = _enableClip;
+  int dopan = _enablePan;
+  float pan_ll, pan_lr, pan_rl, pan_rr;
+  if ( _enablePan )
+    __calcPanCoefficients( buffer->pan, pan_ll, pan_lr, pan_rl, pan_rr );
+
   asm volatile ( "\n\t"
-		 "1:" "\n\t"
-
-		 "vldmia r1!, {s8-s11}" "\n\t"
-
+		 "0:" "\n\t"
+		 "vldmia %[src]!, {s8-s11}" "\n\t"
+		 
 		 "vmul.f32 s8, s8, %[gate]" "\n\t" // sample = src * gate
 		 "vmul.f32 s9, s9, %[gate]" "\n\t"
 		 "vmul.f32 s10, s10, %[gate]" "\n\t"
 		 "vmul.f32 s11, s11, %[gate]" "\n\t"
 
-#ifdef USE_ASM_PAN
+		 "cbz %[dopan], 1f" "\n\t"
 		 // NOTE TO SELF: This looks like a case for vmla, but that turns out slower...
-
 		 "vmul.f32 s20, s8, %[pan_ll]" "\n\t" // l * pan_ll
 		 "vmul.f32 s21, s9, %[pan_lr]" "\n\t" // r * pan_lr
 		 "vmul.f32 s22, s8, %[pan_rl]" "\n\t" // l * pan_rl
@@ -591,64 +592,71 @@ void Timbre::fxAfterBlock(float ratioTimbres, float *mixBuffer) {
 		 "vadd.f32 s9, s22, s23" "\n\t" // r = l * pan_rl + r * pan_rr
 		 "vadd.f32 s10, s20, s21" "\n\t" // l = l * pan_ll + r * pan_lr
 		 "vadd.f32 s11, s22, s23" "\n\t" // r = l * pan_rl + r * pan_rr
-#endif
-#ifndef USE_PREMULT_GAIN
-		 "vmul.f32 s8, s8, %[gain]" "\n\t" // sample = sample * gain
-		 "vmul.f32 s9, s9, %[gain]" "\n\t" // sample = sample * gain
-		 "vmul.f32 s10, s10, %[gain]" "\n\t" // sample = sample * gain
-		 "vmul.f32 s11, s11, %[gain]" "\n\t" // sample = sample * gain
-#endif
-		 "vldmia r2, {s12-s15}" "\n\t"
 
-		 //Clip (may be nop)
+		 "1:" "\n\t"
+
+		 "vldmia %[dst], {s12-s15}" "\n\t" // load destination values
+
+		 "vmul.f32 s8, s8, %[gain]" "\n\t" // sample = sample * gain
+		 "vmul.f32 s9, s9, %[gain]" "\n\t"
+		 "vmul.f32 s10, s10, %[gain]" "\n\t"
+		 "vmul.f32 s11, s11, %[gain]" "\n\t"
+
+		 "cbz %[doclip], 2f" "\n\t"
 		 ASMCLIP(s8)
 		 ASMCLIP(s9)
 		 ASMCLIP(s10)
 		 ASMCLIP(s11)
-
-		 // TODO Can we avoid extra clip, assign then add by adding directly during clip? Might save 1-2 cycles
+		 "2:" "\n\t"
 
 		 "vadd.f32 s12, s12, s8" "\n\t"
 		 "vadd.f32 s13, s13, s9" "\n\t"
 		 "vadd.f32 s14, s14, s10" "\n\t"
 		 "vadd.f32 s15, s15, s11" "\n\t"
 
-		 "vstmia r2!, {s12-s15}" "\n\t"
+		 "vstmia %[dst]!, {s12-s15}" "\n\t"
 
 		 "vadd.f32 %[gate], %[gate], %[step]" "\n\t"
 		 "subs %[count], #4" "\n\t"
-		 "bhi 1b" "\n\t"
-		 
-		 : [src] "+r" (src), [dst] "+r" (dst), [gate] "+w" (gateCoef)
-		 : [count] "r" (count), [step] "w" (gateStep),  [gain] "w" (mixerGain), [clip] "w" (clip), [clipn] "w" (clipn),
-		   [pan_ll] "w" (pan_ll), [pan_lr] "w" (pan_lr), [pan_rl] "w" (pan_rl), [pan_rr] "w" (pan_rr)
-		 : "s8", "s9", "s10", "s11", "s12", "s13", "s14", "s15"
-		 );
-#endif
-#if 0
-  //  const float *rd = mixBuffer;
+		 "bhi 0b" "\n\t"
 
-  unsigned i = BLOCK_SIZE*2;
-  do {
-    float left = *src++;
-    left *= gateCoef;
-    //    float right = *src++;
-    //    right *= gateCoef;
+		 : [src] "+r" (src), [dst] "+r" (dst), [gate] "+w" (gateCoef), [count] "+r" (count)
+		 : [step] "w" (gateStep),
+		   [gain] "w" (gain),
+		   [clip] "w" (clip), [clipn] "w" (clipn), [doclip] "r" (doclip),
+		   [pan_ll] "w" (pan_ll), [pan_lr] "w" (pan_lr), [pan_rl] "w" (pan_rl), [pan_rr] "w" (pan_rr), [dopan] "r" (dopan)
+		 : "s8", "s9", "s10", "s11", // source data
+		   "s12", "s13", "s14", "s15", // destination data
+		   "s20", "s21", "s22", "s23" // pan calculation results
+	       );
+}
 
-    const float l = *rd++;
-    //    float r = *rd++;
-    
-    float lout = left * mixerGain;
-    //    float rout = right * mixerGain;
 
-    lout = FLOATCLAMP(lout,-ratioTimbres,ratioTimbres);
-    //    rout = FLOATCLAMP(rout,-ratioTimbres,ratioTimbres);
 
-    //    rout += r;
-    *dst++ = l + lout;
-    //    *dst++ = r;
-  } while ( --i );
-#endif
+void Timbre::fxAfterBlock(float ratioTimbres, float *mixBuffer) {
+  
+  float gainTmp =  params.effect.param3 * numberOfVoiceInverse * ratioTimbres;
+  mixerGain = 0.02f * gainTmp + .98f  * mixerGain;
+  const float pan = params.effect.param1 * 2 - 1.0f ;
+
+  struct sample_buffer_fx buffer = { sampleBlock,
+				     mixBuffer,
+				     BLOCK_SIZE * 2,
+				     1.0f, 0.0f,
+				     mixerGain,
+				     ratioTimbres,
+				     pan
+  };
+
+  switch( (int)params.effect.type ) {
+  case FILTER_MIXER:
+    __fxProcessBuffer<true,false>( &buffer ); // pan = true, clip = false
+    break;
+  case FILTER_OFF:
+    __fxProcessBuffer<false,false>( &buffer ); // pan = false, clip = false
+    break;
+  }
+
 #if 0
     // Gate algo !!
     float gate = this->matrix.getDestination(MAIN_GATE);

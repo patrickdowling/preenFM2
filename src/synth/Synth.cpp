@@ -242,7 +242,6 @@ void Synth::buildNewSampleBlock() {
     if (likely(timbres[3].params.engine1.numberOfVoice > 0)) {
       timbres[3].fxAfterBlock(ratioTimbre, mixBuffer);
     }
-
     CYCLE_MEASURE_END();
 
     CYCLE_MEASURE_START(cycles_timbres);
