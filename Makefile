@@ -82,6 +82,7 @@ SRC_FIRMWARE = src/PreenFM.cpp \
 	src/synth/SynthState.cpp \
 	src/synth/Voice.cpp \
 	src/synth/Timbre.cpp \
+	src/synth/TimbreFX.cpp \
 	src/synth/Common.cpp \
 	src/library/fat_fs/src/ff.c \
 	src/library/fat_fs/src/fattime.c  \
