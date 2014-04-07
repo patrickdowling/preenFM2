@@ -110,6 +110,77 @@ bool Synth::isPlaying() {
     return false;
 }
 
+#ifdef SYNTH_ASM_MIX
+static __attribute__((always_inline)) inline
+void __mixTimbreSamples( int *dst, const float *samplesFromTimbre1, const float *samplesFromTimbre2, const float *samplesFromTimbre3, const float *samplesFromTimbre4 ) {
+    unsigned count = BLOCK_SIZE * 2;
+    static const float offset = 131071.0f;
+    asm volatile( "\n\t"
+                  "0:" "\n\t"
+                  // Build sum of timbres in s0-s7, 8 values at a time
+                  "vldmia %[t1]!, {s0-s7}" "\n\t"
+                  "vldmia %[t2]!, {s8-s15}" "\n\t"
+                  "vldmia %[t3]!, {s16-s23}" "\n\t"
+                  "vadd.f32 s0, s0, s8" "\n\t"
+                  "vadd.f32 s1, s1, s9" "\n\t"
+                  "vadd.f32 s2, s2, s10" "\n\t"
+                  "vadd.f32 s3, s3, s11" "\n\t"
+                  "vadd.f32 s4, s4, s12" "\n\t"
+                  "vadd.f32 s5, s5, s13" "\n\t"
+                  "vadd.f32 s6, s6, s14" "\n\t"
+                  "vadd.f32 s7, s7, s15" "\n\t"
+
+                  "vadd.f32 s0, s0, s16" "\n\t"
+                  "vadd.f32 s1, s1, s17" "\n\t"
+                  "vadd.f32 s2, s2, s18" "\n\t"
+                  "vadd.f32 s3, s3, s19" "\n\t"
+                  "vadd.f32 s4, s4, s20" "\n\t"
+                  "vadd.f32 s5, s5, s21" "\n\t"
+                  "vadd.f32 s6, s6, s22" "\n\t"
+                  "vadd.f32 s7, s7, s23" "\n\t"
+
+                  "vldmia %[t4]!, {s8-s15}" "\n\t"
+                  "vadd.f32 s0, s0, s8" "\n\t"
+                  "vadd.f32 s1, s1, s9" "\n\t"
+                  "vadd.f32 s2, s2, s10" "\n\t"
+                  "vadd.f32 s3, s3, s11" "\n\t"
+                  "vadd.f32 s4, s4, s12" "\n\t"
+                  "vadd.f32 s5, s5, s13" "\n\t"
+                  "vadd.f32 s6, s6, s14" "\n\t"
+                  "vadd.f32 s7, s7, s15" "\n\t"
+
+                  "vadd.f32 s0, s0, %[offset]" "\n\t"
+                  "vadd.f32 s1, s1, %[offset]" "\n\t"
+                  "vadd.f32 s2, s2, %[offset]" "\n\t"
+                  "vadd.f32 s3, s3, %[offset]" "\n\t"
+                  "vadd.f32 s4, s4, %[offset]" "\n\t"
+                  "vadd.f32 s5, s5, %[offset]" "\n\t"
+                  "vadd.f32 s6, s6, %[offset]" "\n\t"
+                  "vadd.f32 s7, s7, %[offset]" "\n\t"
+
+                  // convert to int and store
+                  "vcvt.s32.f32 s0, s0" "\n\t"
+                  "vcvt.s32.f32 s1, s1" "\n\t"
+                  "vcvt.s32.f32 s2, s2" "\n\t"
+                  "vcvt.s32.f32 s3, s3" "\n\t"
+                  "vcvt.s32.f32 s4, s4" "\n\t"
+                  "vcvt.s32.f32 s5, s5" "\n\t"
+                  "vcvt.s32.f32 s6, s6" "\n\t"
+                  "vcvt.s32.f32 s7, s7" "\n\t"
+                  "vstmia %[dst]!, {s0-s7}" "\n\t"
+
+                  "subs %[count], #8" "\n\t"
+                  "bhi 0b" "\n\t"
+
+                  : [dst] "+r" (dst), [count] "+r" (count),
+                    [t1] "+r" (samplesFromTimbre1), [t2] "+r" (samplesFromTimbre2), [t3] "+r" (samplesFromTimbre3), [t4] "+r" (samplesFromTimbre4)
+                  : [offset] "w" (offset)
+                  : "s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7",
+                    "s8", "s9", "s10", "s11", "s12", "s13", "s14", "s15",
+                    "s16", "s17", "s18", "s19", "s20", "s21", "s22", "s23"
+                  );
+}
+#endif
 
 void Synth::buildNewSampleBlock() {
     CYCLE_MEASURE_START(cycles_rng);
@@ -215,17 +286,19 @@ void Synth::buildNewSampleBlock() {
     const float *sampleFromTimbre2 = timbres[1].getSampleBlock();
     const float *sampleFromTimbre3 = timbres[2].getSampleBlock();
     const float *sampleFromTimbre4 = timbres[3].getSampleBlock();
-
     int *cb = &samples[writeCursor];
 
-    float toAdd = 131071.0f;
+#ifdef SYNTH_ASM_MIX
+    __mixTimbreSamples( cb, sampleFromTimbre1, sampleFromTimbre2, sampleFromTimbre3, sampleFromTimbre4 );
+#else
+    static const float toAdd = 131071.0f;
     for (int s = 0; s < 64/4; s++) {
         *cb++ = (int)((*sampleFromTimbre1++ + *sampleFromTimbre2++ + *sampleFromTimbre3++ + *sampleFromTimbre4++) + toAdd);
         *cb++ = (int)((*sampleFromTimbre1++ + *sampleFromTimbre2++ + *sampleFromTimbre3++ + *sampleFromTimbre4++) + toAdd);
         *cb++ = (int)((*sampleFromTimbre1++ + *sampleFromTimbre2++ + *sampleFromTimbre3++ + *sampleFromTimbre4++) + toAdd);
         *cb++ = (int)((*sampleFromTimbre1++ + *sampleFromTimbre2++ + *sampleFromTimbre3++ + *sampleFromTimbre4++) + toAdd);
     }
-
+#endif
     CYCLE_MEASURE_END();
 
     writeCursor = (writeCursor + 64) & 255;

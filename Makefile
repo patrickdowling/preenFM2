@@ -134,7 +134,7 @@ SMALLBINOPTS = -mfpu=fpv4-sp-d16 -ffunction-sections -fdata-sections -fno-rtti -
 
 # 
 DEFINE = -DPFM2_VERSION=${PFM2_VERSION} -DPFM2_BOOTLOADER_VERSION=${PFM2_BOOTLOADER_VERSION}
-
+DEFINE += -DSYNTH_ASM_MIX
 ifeq ($(DEBUG),1)
 DEFINE += -DDEBUG
 endif
