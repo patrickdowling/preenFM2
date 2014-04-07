@@ -420,6 +420,32 @@ void Timbre::prepareForNextBlock() {
 }
 
 void Timbre::cleanNextBlock() {
+#if TIMBRE_ASM_CLEAN
+    float *dst = sampleBlock;
+    unsigned count = BLOCK_SIZE*2;
+    asm volatile( "\n\t"
+                  "mov r4 ,#0" "\n\t"
+                  "mov r5 ,#0" "\n\t"
+                  "mov r6 ,#0" "\n\t"
+                  "mov r7 ,#0" "\n\t"
+                  "mov r8 ,#0" "\n\t"
+                  "mov r9 ,#0" "\n\t"
+                  "mov r10 ,#0" "\n\t"
+                  "mov r11 ,#0" "\n\t"
+                  "0:" "\n\t"
+                  "cbz %[count], 1f" "\n\t"
+                  "stmia %[dst]!, {r4-r11}" "\n\t"
+                  "stmia %[dst]!, {r4-r11}" "\n\t"
+                  "stmia %[dst]!, {r4-r11}" "\n\t"
+                  "stmia %[dst]!, {r4-r11}" "\n\t"
+                  "subs %[count], #32" "\n\t"
+                  "b 0b" "\n\t"
+                  "1:" "\n\t"
+                  : [dst] "+r" (dst), [count] "+r" (count)
+                  :
+                  : "r4", "r5", "r6", "r7", "r8", "r9", "r10", "r11"
+                  );
+#else
 	float *sp = this->sampleBlock;
 	while (sp < this->sbMax) {
 		*sp++ = 0;
@@ -431,6 +457,7 @@ void Timbre::cleanNextBlock() {
 		*sp++ = 0;
 		*sp++ = 0;
 	}
+#endif
 }
 
 
