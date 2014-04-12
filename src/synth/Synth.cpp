@@ -28,7 +28,8 @@ CYCCNT_buffer cycles_rng, cycles_voices1, cycles_voices2, cycles_fx, cycles_timb
 #endif
 
 extern float noise[32];
-float ratiosTimbre[]= { 131072.0f * 1.0f, 131072.0f * 1.0f, 131072.0f *  0.5f, 131072.0f * 0.333f, 131072.0f * 0.25f };
+float ratiosTimbre[]= { 131072.0f * 1.0f, 131072.0f * 1.0f, 131072.0f *  0.707f, 131072.0f * 0.577f, 131072.0f * 0.5f };
+//float ratiosTimbre[]= { 131072.0f * 1.0f, 131072.0f * 1.0f, 131072.0f *  0.5f, 131072.0f * 0.333f, 131072.0f * 0.25f };
 
 Synth::Synth(void) {
 }
@@ -254,26 +255,25 @@ void Synth::buildNewSampleBlock() {
     int *dst = &samples[writeCursor];
     unsigned count = BLOCK_SIZE * 2; // stereo samples
     asm volatile( "\n\t" 
-		  "mov r1, %[src]" "\n\t"
-		  "mov r2, %[dst]" "\n\t"
-		  "mov r3, %[count]" "\n\t"
-		  "1:" "\n\t"
-		  "vldmia.32 r1!, {s1-s8}" "\n\t"
-		  "vcvt.s32.f32 s9, s1" "\n\t"
-		  "vcvt.s32.f32 s10, s2" "\n\t"
-		  "vcvt.s32.f32 s11, s3" "\n\t"
-		  "vcvt.s32.f32 s12, s4" "\n\t"
-		  "vcvt.s32.f32 s13, s5" "\n\t"
-		  "vcvt.s32.f32 s14, s6" "\n\t"
-		  "vcvt.s32.f32 s15, s7" "\n\t"
-		  "vcvt.s32.f32 s16, s8" "\n\t"
-		  "vstmia.32 r2!, {s9-s16}" "\n\t"
-		  "subs r3, #8" "\n\t"
-		  "bhi 1b" "\n\t"
-		  : [src] "+r" (src), [dst] "+r" (dst)
-		  : [count] "r" (count)
-		  : "r1", "r2", "r3", "s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11", "s12", "s13", "s14", "s15", "s16"
-		  );
+				  "0:" "\n\t"
+				  "cbz %[count], 1f" "\n\t"
+				  "vldmia.32 %[src]!, {s1-s8}" "\n\t"
+				  "vcvt.s32.f32 s9, s1" "\n\t"
+				  "vcvt.s32.f32 s10, s2" "\n\t"
+				  "vcvt.s32.f32 s11, s3" "\n\t"
+				  "vcvt.s32.f32 s12, s4" "\n\t"
+				  "vcvt.s32.f32 s13, s5" "\n\t"
+				  "vcvt.s32.f32 s14, s6" "\n\t"
+				  "vcvt.s32.f32 s15, s7" "\n\t"
+				  "vcvt.s32.f32 s16, s8" "\n\t"
+				  "vstmia.32 %[dst]!, {s9-s16}" "\n\t"
+				  "subs %[count], #8" "\n\t"
+				  "b 0b" "\n\t"
+				  "1: " "\n\t"
+                  : [src] "+r" (src), [dst] "+r" (dst), [count] "+r" (count)
+				  :
+				  : "s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11", "s12", "s13", "s14", "s15", "s16"
+				  );
 
     /*
     // TIM: 328 | 420

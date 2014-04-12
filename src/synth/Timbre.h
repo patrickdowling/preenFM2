@@ -20,6 +20,7 @@
 #ifndef TIMBRE_H_
 #define TIMBRE_H_
 
+#include <math.h>
 #include "Common.h"
 
 #include "Osc.h"
@@ -79,7 +80,7 @@ public:
     void preenNoteOff(char note);
     void numberOfVoicesChanged() {
         if (params.engine1.numberOfVoice > 0) {
-            numberOfVoiceInverse = 1.0f / params.engine1.numberOfVoice;
+            numberOfVoiceInverse = 1.0f / sqrt( params.engine1.numberOfVoice );
         } else {
             numberOfVoiceInverse = 1.0f;
         }
