@@ -21,7 +21,6 @@ struct filter_values {
 
 };
 
-//template <bool _enablePan, bool _enableClip>
 void __fxProcessBuffer( const struct sample_buffer_fx *buffer, int _enablePan, int _enableClip );
 
 void __fxProcessBufferLP( const struct sample_buffer_fx *buffer, int _enablePan, int _enableClip, struct filter_values *_filter );

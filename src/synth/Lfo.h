@@ -35,10 +35,12 @@ public:
 	Lfo();
 	virtual ~Lfo() {}
 	virtual void init(Matrix* matrix, SourceEnum source, DestinationEnum dest);
+	/*
 	virtual void valueChanged(int encoder) = 0;
 	virtual void nextValueInMatrix() = 0 ;
 	virtual void noteOn() = 0;
 	virtual void noteOff() = 0;
+*/
 	virtual void midiClock(int songPosition, bool computeStep) {}
 	void midiContinue() {
 		ticks = 0;

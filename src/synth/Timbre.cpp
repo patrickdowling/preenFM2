@@ -510,8 +510,7 @@ void Timbre::fxAfterBlock(float ratioTimbres, float *mixBuffer) {
   mixerGain = 0.02f * gainTmp + .98f  * mixerGain;
   const float pan = params.effect.param1 * 2 - 1.0f ;
 
-  // TODO Gate
-
+#if 1
   struct sample_buffer_fx buffer = { sampleBlock,
 				     mixBuffer,
 				     BLOCK_SIZE * 2,
@@ -545,9 +544,11 @@ void Timbre::fxAfterBlock(float ratioTimbres, float *mixBuffer) {
     __fxProcessBuffer( &buffer, 0, 0 ); // pan = false, clip = false
     break;
   }
+#else
+  float gateCoef = 1.f;
+  float gateStep = 0.0f;
 
-#if 0
-    // Gate algo !!
+  // Gate algo !!
     float gate = this->matrix.getDestination(MAIN_GATE);
     if (unlikely(gate > 0 || currentGate > 0)) {
 		gate *=.72547132656922730694f; // 0 < gate < 1.0
@@ -576,7 +577,7 @@ void Timbre::fxAfterBlock(float ratioTimbres, float *mixBuffer) {
     
     // LP Algo
     int effectType = params.effect.type;
-    float gainTmp =  params.effect.param3 * numberOfVoiceInverse * ratioTimbres;
+	//    float gainTmp =  params.effect.param3 * numberOfVoiceInverse * ratioTimbres;
     mixerGain = 0.02f * gainTmp + .98  * mixerGain;
 
     switch (effectType) {
