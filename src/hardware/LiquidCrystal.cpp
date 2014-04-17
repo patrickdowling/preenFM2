@@ -50,7 +50,7 @@ LiquidCrystal::LiquidCrystal() {
 
 	realTimeDisplay = true;
 	// For bootloader and firmware
-	delayAfterCommand = 50;
+	delayAfterCommand = 100;
 
 	_rs_pin = pins[0];
 	_enable_pin = pins[1];
@@ -112,13 +112,11 @@ void LiquidCrystal::begin(unsigned char cols, unsigned char lines) {
 	sendInitCommand(LCD_FUNCTIONSET | LCD_4BITMODE);
 	delay_ms(1);
 
-
 	if (lines > 1) {
 		_displayfunction = LCD_4BITMODE | LCD_2LINE | LCD_5x8DOTS;
 	} else {
 		_displayfunction = LCD_4BITMODE | LCD_1LINE | LCD_5x8DOTS;
 	}
-
 	// finally, set # lines, font size, etc.
 	command(LCD_FUNCTIONSET | _displayfunction );
 
@@ -136,11 +134,12 @@ void LiquidCrystal::begin(unsigned char cols, unsigned char lines) {
 	// turn the display on with no cursor or blinking default
 	_displaycontrol = LCD_DISPLAYON | LCD_CURSOROFF | LCD_BLINKOFF;
 	 display();
-
+	 /*
 #ifndef BOOTLOADER
 	delayAfterCommand = 38;
 #endif
-
+	 */
+	
 }
 
 
@@ -387,7 +386,7 @@ void LiquidCrystal::send(unsigned char value, bool mode) {
 		}
 
 		write4bits(value >> 4);
-		pulseEnable(1);
+		pulseEnable(delayAfterCommand);
 		write4bits(value);
 		pulseEnable(delayAfterCommand);
 	} else {
@@ -433,3 +432,15 @@ void LiquidCrystal::write4bits(unsigned char value) {
 	}
 }
 
+void LiquidCrystal::displayBitmap( uint8_t x, uint8_t y, uint8_t w, uint8_t h, const uint8_t *bitmap )
+{
+	command( 0xf1 );
+ 	write( x );
+	write( y );
+	write( x + w );
+	write( y + h );
+	write( 'H' );
+	int count = (w / 8) * h;
+	while ( count-- )
+		write( *bitmap++ );
+}

@@ -102,6 +102,8 @@ public:
   void print(float f);
   void realTimeAction(LCDAction *action, void (*callback)());
 
+	void displayBitmap( uint8_t x, uint8_t y, uint8_t w, uint8_t h, const uint8_t *bitmap );
+	
 private:
   void send(unsigned char, bool);
   void sendInitCommand(unsigned char value);

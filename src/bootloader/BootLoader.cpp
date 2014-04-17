@@ -562,6 +562,19 @@ int main(void) {
 	switchLedOn();
 
 	lcd.begin(20,4);
+
+#if 0
+	while ( true ) {
+		uDelay(10000);
+		switchLedOn();
+		uDelay(10000);
+		switchLedOff();
+		lcd.clear();
+		lcd.setCursor(1,0);
+		lcd.print( "x" );
+	}
+
+#else
 	BootLoader bootLoader(&lcd);
 
 	if (bootLoader.getButton() == 0 && (*(__IO uint32_t*)magicRam != BOOTLOADER_WORD)) {
@@ -625,7 +638,7 @@ int main(void) {
 			break;
 		}
 	}
-
+#endif
 }
 
 void BootLoader::doReboot() {

@@ -32,7 +32,7 @@
 #include "Hexter.h"
 
 #include "ff.h"
-
+#include "pfm_logo_32x32.h"
 
 SynthState         synthState __attribute__ ((section(".ccmnoload")));
 Synth              synth __attribute__ ((section(".ccmnoload")));
@@ -65,7 +65,7 @@ void setup() {
     lcd.begin(20, 4);
 
     LCD_InitChars(&lcd);
-
+	/*
     for (int r=0; r<20; r++) {
     	lcd.setCursor(r,0);
     	lcd.print((char)0);
@@ -76,7 +76,7 @@ void setup() {
     	lcd.setCursor(r,3);
     	lcd.print((char)0);
     }
-
+*/
     LED_Config();
 	USART_Config();
 	MCP4922_Config();
@@ -169,7 +169,7 @@ void setup() {
     		synth.noteOff(0,52);
     		break;
     	}
-
+		/*
     	for (char s=1; s<6; s++) {
     	    fillSoundBuffer();
 			lcd.setCursor(r,0);
@@ -205,6 +205,7 @@ void setup() {
 		lcd.setCursor(r,2);
 		lcd.print(line2[r]);
 	    fillSoundBuffer();
+		*/
     }
 
 
@@ -218,6 +219,7 @@ void setup() {
 //		lcd.print("R4f");
 //    }
 
+	lcd.displayBitmap( 0, 0, 32, 32, pfm_logo_32x32 );
 
     for (int i=0; i<4000; i++) {
         fillSoundBuffer();
