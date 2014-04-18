@@ -220,8 +220,13 @@ void setup() {
 //    }
 
 	lcd.displayBitmap( 0, 0, 32, 32, pfm_logo_32x32 );
+	lcd.setGraphicsFont( 'A' );
+	lcd.printGraphicalText( 34, 8, "vfd graphical text..." );
+	lcd.setGraphicsFont( 'c' );
+	lcd.printGraphicalText( 40, 32, "PreenFM2" );
+		
 
-    for (int i=0; i<4000; i++) {
+    for (int i=0; i<40000; i++) {
         fillSoundBuffer();
 		PreenFM2_uDelay(250);
     }

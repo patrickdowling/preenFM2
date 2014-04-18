@@ -437,10 +437,30 @@ void LiquidCrystal::displayBitmap( uint8_t x, uint8_t y, uint8_t w, uint8_t h, c
 	command( 0xf1 );
  	write( x );
 	write( y );
-	write( x + w );
-	write( y + h );
+	write( x + w - 1);
+	write( y + h - 1);
 	write( 'H' );
+	delayAfterCommand *= 2;
 	int count = (w / 8) * h;
 	while ( count-- )
 		write( *bitmap++ );
+	delayAfterCommand /= 2;
+}
+
+void LiquidCrystal::setGraphicsFont( char font )
+{
+	command( 0xf2 );
+	write( font );
+	PreenFM2_uDelay(delayAfterCommand);
+}
+
+void LiquidCrystal::printGraphicalText( uint8_t x, uint8_t y, const char *str )
+{
+	command( 0xf0 );
+	write( x );
+	write( y );
+	delayAfterCommand *= 2;
+	while ( *str )
+		write( *str++ );
+	delayAfterCommand /= 2;
 }

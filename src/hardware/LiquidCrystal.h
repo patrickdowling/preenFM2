@@ -103,6 +103,8 @@ public:
   void realTimeAction(LCDAction *action, void (*callback)());
 
 	void displayBitmap( uint8_t x, uint8_t y, uint8_t w, uint8_t h, const uint8_t *bitmap );
+	void setGraphicsFont( char font );
+	void printGraphicalText( uint8_t x, uint8_t y, const char *str );
 	
 private:
   void send(unsigned char, bool);
