@@ -36,11 +36,22 @@ enum NewNoteType {
 };
 
 
-uint16_t lut_res_arpeggiator_patterns[]  = {
-   21845,  62965,  46517,  54741,  43861,  22869,  38293,   2313,
-   37449,  21065,  18761,  54553,  27499,  23387,  30583,  28087,
-   22359,  28527,  30431,  43281,  28609,  53505,
+arp_pattern_t lut_res_arpeggiator_patterns[ ARPEGGIATOR_PRESET_PATTERN_COUNT ]  = {
+  ARP_PATTERN(21845), ARP_PATTERN(62965), ARP_PATTERN(46517), ARP_PATTERN(54741),
+  ARP_PATTERN(43861), ARP_PATTERN(22869), ARP_PATTERN(38293), ARP_PATTERN(2313),
+  ARP_PATTERN(37449), ARP_PATTERN(21065), ARP_PATTERN(18761), ARP_PATTERN(54553),
+  ARP_PATTERN(27499), ARP_PATTERN(23387), ARP_PATTERN(30583), ARP_PATTERN(28087),
+  ARP_PATTERN(22359), ARP_PATTERN(28527), ARP_PATTERN(30431), ARP_PATTERN(43281),
+  ARP_PATTERN(28609), ARP_PATTERN(53505)
 };
+uint16_t Timbre::getArpeggiatorPattern() const
+{
+  const int pattern = (int)params.engineArp2.pattern;
+  if ( pattern < ARPEGGIATOR_PRESET_PATTERN_COUNT )
+    return ARP_PATTERN_GETMASK(lut_res_arpeggiator_patterns[ pattern ]);
+  else
+    return ARP_PATTERN_GETMASK( params.engineArpUserPatterns.patterns[ pattern - ARPEGGIATOR_PRESET_PATTERN_COUNT ] );
+}
 
 const uint8_t midi_clock_tick_per_step[17]  = {
   192, 144, 96, 72, 64, 48, 36, 32, 24, 16, 12, 8, 6, 4, 3, 2, 1
@@ -162,7 +173,7 @@ void Timbre::initVoicePointer(int n, Voice* voice) {
 }
 
 void Timbre::noteOn(char note, char velocity) {
-	if (params.engineApr1.clock) {
+	if (params.engineArp1.clock) {
 		arpeggiatorNoteOn(note, velocity);
 	} else {
 		preenNoteOn(note, velocity);
@@ -170,7 +181,7 @@ void Timbre::noteOn(char note, char velocity) {
 }
 
 void Timbre::noteOff(char note) {
-	if (params.engineApr1.clock) {
+	if (params.engineArp1.clock) {
 		arpeggiatorNoteOff(note);
 	} else {
 		preenNoteOff(note);
@@ -372,7 +383,7 @@ void Timbre::setArpeggiatorClock(float clockValue) {
 		note_stack.Clear();
 	}
 	if (clockValue == CLOCK_INTERNAL) {
-	    setNewBPMValue(params.engineApr1.BPM);
+	    setNewBPMValue(params.engineArp1.BPM);
 	}
 	if (clockValue == CLOCK_EXTERNAL) {
 		// Let's consider we're running
@@ -384,7 +395,7 @@ void Timbre::setArpeggiatorClock(float clockValue) {
 void Timbre::prepareForNextBlock() {
 
 	// Apeggiator clock : internal
-	if (params.engineApr1.clock == CLOCK_INTERNAL) {
+	if (params.engineArp1.clock == CLOCK_INTERNAL) {
 		arpegiatorStep+=1.0f;
 		if (unlikely((arpegiatorStep) > ticksEveryNCalls)) {
 			arpegiatorStep -= ticksEveyNCallsInteger;
@@ -795,8 +806,8 @@ void Timbre::resetArpeggiator() {
 	// Reset Arpeggiator
 	FlushQueue();
 	note_stack.Clear();
-	setArpeggiatorClock(params.engineApr1.clock);
-	setLatchMode(params.engineApr2.latche);
+	setArpeggiatorClock(params.engineArp1.clock);
+	setLatchMode(params.engineArp2.latche);
 }
 
 
@@ -872,7 +883,7 @@ void Timbre::setNewEffecParam(int encoder) {
 
 void Timbre::arpeggiatorNoteOn(char note, char velocity) {
 	// CLOCK_MODE_INTERNAL
-	if (params.engineApr1.clock == CLOCK_INTERNAL) {
+	if (params.engineArp1.clock == CLOCK_INTERNAL) {
 		if (idle_ticks_ >= 96 || !running_) {
 			Start();
 		}
@@ -902,19 +913,19 @@ void Timbre::arpeggiatorNoteOff(char note) {
 
 
 void Timbre::OnMidiContinue() {
-	if (params.engineApr1.clock == CLOCK_EXTERNAL) {
+	if (params.engineArp1.clock == CLOCK_EXTERNAL) {
 		running_ = 1;
 	}
 }
 
 void Timbre::OnMidiStart() {
-	if (params.engineApr1.clock == CLOCK_EXTERNAL) {
+	if (params.engineArp1.clock == CLOCK_EXTERNAL) {
 		Start();
 	}
 }
 
 void Timbre::OnMidiStop() {
-	if (params.engineApr1.clock == CLOCK_EXTERNAL) {
+	if (params.engineArp1.clock == CLOCK_EXTERNAL) {
 		running_ = 0;
 		FlushQueue();
 	}
@@ -922,7 +933,7 @@ void Timbre::OnMidiStop() {
 
 
 void Timbre::OnMidiClock() {
-	if (params.engineApr1.clock == CLOCK_EXTERNAL && running_) {
+	if (params.engineArp1.clock == CLOCK_EXTERNAL && running_) {
 		Tick();
 	}
 }
@@ -972,7 +983,7 @@ void Timbre::Tick() {
 	++idle_ticks_;
 	if (idle_ticks_ >= 96) {
 		idle_ticks_ = 96;
-	    if (params.engineApr1.clock == CLOCK_INTERNAL) {
+	    if (params.engineArp1.clock == CLOCK_INTERNAL) {
 	      running_ = 0;
 	      FlushQueue();
 	    }
@@ -980,13 +991,13 @@ void Timbre::Tick() {
 
 	SendScheduledNotes();
 
-	if (tick_ >= midi_clock_tick_per_step[(int)params.engineApr2.division]) {
+	if (tick_ >= midi_clock_tick_per_step[(int)params.engineArp2.division]) {
 		tick_ = 0;
-		uint16_t pattern = lut_res_arpeggiator_patterns[(int)params.engineApr2.pattern - 1];
+		uint16_t pattern = getArpeggiatorPattern();
 		uint8_t has_arpeggiator_note = (bitmask_ & pattern) ? 255 : 0;
 		if (note_stack.size() && has_arpeggiator_note) {
 			StepArpeggio();
-			const NoteEntry &noteEntry = ARPEGGIO_DIRECTION_PLAYED == params.engineApr1.direction
+			const NoteEntry &noteEntry = ARPEGGIO_DIRECTION_PLAYED == params.engineArp1.direction
 			  ? note_stack.played_note(current_step_)
 			  : note_stack.sorted_note(current_step_);
 
@@ -1004,7 +1015,7 @@ void Timbre::Tick() {
 			}
 			// Send a note on and schedule a note off later.
 			preenNoteOn(note, velocity);
-			event_scheduler.Schedule(note, 0, midi_clock_tick_per_step[(int)params.engineApr2.duration] - 1, 0);
+			event_scheduler.Schedule(note, 0, midi_clock_tick_per_step[(int)params.engineArp2.duration] - 1, 0);
 		}
 		bitmask_ <<= 1;
 		if (!bitmask_) {
@@ -1023,12 +1034,12 @@ void Timbre::StepArpeggio() {
 	}
 
 	uint8_t num_notes = note_stack.size();
-	if (params.engineApr1.direction == ARPEGGIO_DIRECTION_RANDOM) {
+	if (params.engineArp1.direction == ARPEGGIO_DIRECTION_RANDOM) {
 		uint8_t random_byte = *(uint8_t*)noise;
 		current_octave_ = random_byte & 0xf;
 		current_step_ = (random_byte & 0xf0) >> 4;
-		while (current_octave_ >= params.engineApr1.octave) {
-			current_octave_ -= params.engineApr1.octave;
+		while (current_octave_ >= params.engineArp1.octave) {
+			current_octave_ -= params.engineArp1.octave;
 		}
 		while (current_step_ >= num_notes) {
 			current_step_ -= num_notes;
@@ -1045,11 +1056,11 @@ void Timbre::StepArpeggio() {
 		}
 		if (change_octave) {
 			current_octave_ += current_direction_;
-			if (current_octave_ >= params.engineApr1.octave || current_octave_ < 0) {
-				if (params.engineApr1.direction == ARPEGGIO_DIRECTION_UP_DOWN) {
+			if (current_octave_ >= params.engineArp1.octave || current_octave_ < 0) {
+				if (params.engineArp1.direction == ARPEGGIO_DIRECTION_UP_DOWN) {
 					current_direction_ = -current_direction_;
 					StartArpeggio();
-					if (num_notes > 1 || params.engineApr1.octave > 1) {
+					if (num_notes > 1 || params.engineArp1.octave > 1) {
 						StepArpeggio();
 					}
 				} else {
@@ -1067,7 +1078,7 @@ void Timbre::StartArpeggio() {
     current_step_ = 0;
   } else {
     current_step_ = note_stack.size() - 1;
-    current_octave_ = params.engineApr1.octave - 1;
+    current_octave_ = params.engineArp1.octave - 1;
   }
 }
 
@@ -1075,9 +1086,9 @@ void Timbre::Start() {
 	bitmask_ = 1;
 	recording_ = 0;
 	running_ = 1;
-	tick_ = midi_clock_tick_per_step[(int)params.engineApr2.division] - 1;
+	tick_ = midi_clock_tick_per_step[(int)params.engineArp2.division] - 1;
     current_octave_ = 127;
-	current_direction_ = (params.engineApr1.direction == ARPEGGIO_DIRECTION_DOWN ? -1 : 1);
+	current_direction_ = (params.engineArp1.direction == ARPEGGIO_DIRECTION_DOWN ? -1 : 1);
 }
 
 

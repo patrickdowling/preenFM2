@@ -1,4 +1,4 @@
-PFM2_VERSION_NUMBER=1.B10
+PFM2_VERSION_NUMBER=1.B12
 PFM2_BIN_NUMBER=$(subst .,,${PFM2_VERSION_NUMBER})
 PFM2_BOOTLOADER_VERSION_NUMBER=1.11
 PFM2_VERSION=\"${PFM2_VERSION_NUMBER}\"
@@ -23,6 +23,11 @@ LD      = arm-none-eabi-ld -v
 CP      = arm-none-eabi-objcopy
 OD      = arm-none-eabi-objdump
 AS      = arm-none-eabi-as
+
+# DEBUG builds
+ifeq ($(DEBUG),1)
+DEFINE += -DDEBUG
+endif
 
 # Specify optimization
 ifndef OPTIMIZE
@@ -151,10 +156,8 @@ DEFINE = -DPFM2_VERSION=${PFM2_VERSION} -DPFM2_BOOTLOADER_VERSION=${PFM2_BOOTLOA
 COMMONFLAGS = -g -O$(OPTIMIZE) -c -fno-common -mthumb -mcpu=cortex-m4 -mfloat-abi=hard $(SMALLBINOPTS) $(DEFINE) $(INCLUDESDIR) -fsigned-char
 CXXFLAGS += $(COMMONFLAGS) -fno-rtti -fno-exceptions
 CFLAGS += $(COMMONFLAGS)
-# -DDEBUG
-
-AFLAGS  = -ahls -mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16    
-LFLAGS  = -Tlinker/stm32f4xx.ld  -mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -gc-sections    --specs=nano.specs
+AFLAGS += -ahls -mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16    
+LFLAGS += -Tlinker/stm32f4xx.ld  -mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -gc-sections    --specs=nano.specs
 LFLAGS_BOOTLOADER  = -Tlinker_bootloader/stm32f4xx.ld  -mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -gc-sections --specs=nano.specs  
 CPFLAGS = -Obinary
 
